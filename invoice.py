@@ -15,7 +15,7 @@ async def download_report():
     
     # 2. Draw Content (The "Success" Report)
     p.setFont("Helvetica-Bold", 16)
-    p.drawString(100, 750, "MapPoint.AI - Validation Report")
+    p.drawString(100, 750, "TrueFormat - Validation Report")
     
     p.setFont("Helvetica", 12)
     p.drawString(100, 720, "Status: Data Mapping Verified")
@@ -39,6 +39,6 @@ async def download_report():
         content=buffer.getvalue(),
         media_type="application/pdf",
         headers={
-            "Content-Disposition": "attachment; filename=MapPoint_Validation_Report.pdf"
+            "Content-Disposition": "attachment; filename=TrueFormat_Validation_Report.pdf"
         }
     )

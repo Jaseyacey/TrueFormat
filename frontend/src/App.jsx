@@ -84,7 +84,7 @@ function App() {
   return (
     <main className="app-shell">
       <h1 className="app-title">
-        MapPoint.AI – Sales Import
+        TrueFormat – Sales Import
       </h1>
 
       <div className="upload-row">

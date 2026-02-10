@@ -418,7 +418,7 @@ def extract_pdf_tables(contents: bytes) -> pd.DataFrame:
     # Combine only the relevant line-item tables
     df = pd.concat(all_tables, ignore_index=True)
     
-    # Standard MapPoint.AI Integrity Cleaning (String-First principle)
+    # Standard TrueFormat Integrity Cleaning (String-First principle)
     # Fill NaN/None before converting to string to preserve empty cells
     df = df.fillna('')
     df = df.astype(str)
@@ -761,7 +761,7 @@ async def export_csv(file: UploadFile = File(...), mapping: str = Form(...)):
         return Response(
             content=csv_buffer.getvalue(),
             media_type="text/csv",
-            headers={"Content-Disposition": 'attachment; filename="map-point-export.csv"'}
+            headers={"Content-Disposition": 'attachment; filename="trueformat-export.csv"'}
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Export failed: {e}")
