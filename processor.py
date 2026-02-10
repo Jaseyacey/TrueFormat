@@ -1,13 +1,23 @@
 import io
 import json
 import math
+import os
 import re
+import sqlite3
+import hmac
+import base64
+import time
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
 import pandas as pd
 import pdfplumber
-from fastapi import FastAPI, UploadFile, File, Form, Response, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Response, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel, Field
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
+from dotenv import load_dotenv
 
 try:
     import numpy as np
@@ -20,6 +30,9 @@ except Exception:
 
 app = FastAPI()
 
+# Load local backend env file when present.
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
 # SECURITY: Tighten origins in production
 app.add_middleware(
     CORSMiddleware,
@@ -31,6 +44,137 @@ app.add_middleware(
 
 # PM NOTE: Removed empty string to prevent KeyError during transformation
 TARGET_SCHEMA = ["transaction_id", "date", "description", "quantity", "amount", "line_total", "customer_name"]
+
+DB_PATH = os.path.join(os.path.dirname(__file__), "trueformat.db")
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
+SUPABASE_AUTH_AUD = os.getenv("SUPABASE_AUTH_AUD", "authenticated")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+auth_scheme = HTTPBearer(auto_error=False)
+
+
+class InterestRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    email: str
+    company: str = Field(default="", max_length=200)
+    message: str = Field(default="", max_length=3000)
+
+
+def _db_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db() -> None:
+    with _db_conn() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS interest_leads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                company TEXT,
+                message TEXT,
+                created_at INTEGER NOT NULL
+            )
+            """
+        )
+        conn.commit()
+
+
+def _normalize_email(raw: str) -> str:
+    email = (raw or "").strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=422, detail="Valid email is required.")
+    return email
+
+
+def _b64url_decode(value: str) -> bytes:
+    padding = "=" * ((4 - len(value) % 4) % 4)
+    return base64.urlsafe_b64decode((value + padding).encode("utf-8"))
+
+
+def _parse_supabase_token(token: str) -> dict | None:
+    # Legacy/shared-secret verification path (HS256 projects).
+    if not SUPABASE_JWT_SECRET:
+        return None
+    try:
+        header_b64, payload_b64, sig_b64 = token.split(".", 2)
+        signing_input = f"{header_b64}.{payload_b64}".encode("utf-8")
+        signature = _b64url_decode(sig_b64)
+        expected = hmac.new(
+            SUPABASE_JWT_SECRET.encode("utf-8"),
+            signing_input,
+            digestmod="sha256",
+        ).digest()
+        if not hmac.compare_digest(signature, expected):
+            return None
+        payload = json.loads(_b64url_decode(payload_b64).decode("utf-8"))
+        exp = int(payload.get("exp", 0))
+        if exp <= int(time.time()):
+            return None
+        aud = payload.get("aud")
+        if isinstance(aud, list):
+            if SUPABASE_AUTH_AUD not in aud:
+                return None
+        elif aud and aud != SUPABASE_AUTH_AUD:
+            return None
+        return payload
+    except Exception:
+        return None
+
+
+def _validate_supabase_token_remote(token: str) -> dict | None:
+    """
+    Validate token via Supabase Auth API. Supports asymmetric JWT projects
+    (e.g. ES256) where local HMAC verification is not applicable.
+    """
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        return None
+
+    req = Request(
+        f"{SUPABASE_URL}/auth/v1/user",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "apikey": SUPABASE_ANON_KEY,
+        },
+        method="GET",
+    )
+    try:
+        with urlopen(req, timeout=8) as resp:
+            if resp.status != 200:
+                return None
+            payload = json.loads(resp.read().decode("utf-8"))
+            return payload if isinstance(payload, dict) else None
+    except (HTTPError, URLError, TimeoutError, ValueError):
+        return None
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(auth_scheme),
+) -> str:
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+
+    token = credentials.credentials
+    payload = _parse_supabase_token(token)
+    if not payload:
+        payload = _validate_supabase_token_remote(token)
+
+    email = _normalize_email(payload.get("email", "")) if payload else None
+    if not email:
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "Invalid or expired Supabase token. "
+                "If your project uses asymmetric JWT signing, set SUPABASE_URL and SUPABASE_ANON_KEY on backend."
+            ),
+        )
+    return email
+
+
+init_db()
 
 # --- HELPER FUNCTIONS (The "Integrity Engine") ---
 
@@ -632,8 +776,28 @@ def apply_transformation(file: UploadFile, mapping: dict) -> pd.DataFrame:
 
 # --- API ENDPOINTS ---
 
+@app.post("/interest")
+async def submit_interest(payload: InterestRequest):
+    email = _normalize_email(payload.email)
+    with _db_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO interest_leads (name, email, company, message, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                payload.name.strip(),
+                email,
+                payload.company.strip(),
+                payload.message.strip(),
+                int(time.time()),
+            ),
+        )
+        conn.commit()
+    return {"status": "ok", "message": "Thanks. We received your interest form."}
+
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...), current_user: str = Depends(get_current_user)):
     """Initial upload to identify headers and suggest mapping."""
     try:
         df = clean_and_load(file)
@@ -726,7 +890,11 @@ async def upload_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/transform")
-async def transform_data(file: UploadFile = File(...), mapping: str = Form(...)):
+async def transform_data(
+    file: UploadFile = File(...),
+    mapping: str = Form(...),
+    current_user: str = Depends(get_current_user),
+):
     """Applies mapping and returns a preview for the UI."""
     try:
         user_map = json.loads(mapping)
@@ -749,7 +917,11 @@ async def transform_data(file: UploadFile = File(...), mapping: str = Form(...))
         return {"status": "error", "message": f"Transformation failed: {str(e)}"}
 
 @app.post("/export-csv")
-async def export_csv(file: UploadFile = File(...), mapping: str = Form(...)):
+async def export_csv(
+    file: UploadFile = File(...),
+    mapping: str = Form(...),
+    current_user: str = Depends(get_current_user),
+):
     """The money shot: Returns the cleaned file to the user."""
     try:
         user_map = json.loads(mapping)
