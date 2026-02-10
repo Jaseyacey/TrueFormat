@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import ColumnMapper from './ColumnMapper.jsx';
 import { supabase, supabaseConfigured } from './supabaseClient.js';
+import MarketingHomePage from './MarketingHomePage.jsx';
 import './App.css';
 
 const API_BASE = 'http://127.0.0.1:8000';
@@ -63,57 +64,6 @@ function ConfigErrorPage() {
         <p><code>VITE_SUPABASE_ANON_KEY=...</code></p>
         <p>Then restart Vite dev server.</p>
       </div>
-    </section>
-  );
-}
-
-function HomePage({ interestForm, setInterestForm, interestStatus, onSubmitInterest }) {
-  return (
-    <section className="page-grid">
-      <div className="hero">
-        <h1 className="app-title">TrueFormat</h1>
-        <p className="hero-text">Turn messy invoices into clean import-ready data with reliable PDF extraction and validation.</p>
-        <div className="hero-actions">
-          <button className="btn btn-primary" onClick={() => navigate('/signup')}>Create Account</button>
-          <button className="btn btn-dark" onClick={() => navigate('/app')}>Open App</button>
-        </div>
-      </div>
-      <aside className="interest-card">
-        <h2 className="section-title">Interest Form</h2>
-        <p className="muted">Tell us what you need. We will follow up with setup guidance.</p>
-        <form onSubmit={onSubmitInterest} className="stack-form">
-          <input
-            className="mapper-input"
-            placeholder="Full name"
-            value={interestForm.name}
-            onChange={(e) => setInterestForm((prev) => ({ ...prev, name: e.target.value }))}
-            required
-          />
-          <input
-            className="mapper-input"
-            type="email"
-            placeholder="Work email"
-            value={interestForm.email}
-            onChange={(e) => setInterestForm((prev) => ({ ...prev, email: e.target.value }))}
-            required
-          />
-          <input
-            className="mapper-input"
-            placeholder="Company"
-            value={interestForm.company}
-            onChange={(e) => setInterestForm((prev) => ({ ...prev, company: e.target.value }))}
-          />
-          <textarea
-            className="mapper-input"
-            rows={4}
-            placeholder="What extraction formats or workflows do you need?"
-            value={interestForm.message}
-            onChange={(e) => setInterestForm((prev) => ({ ...prev, message: e.target.value }))}
-          />
-          <button className="btn btn-success" type="submit">Submit Interest</button>
-          {interestStatus && <p className="status-text">{interestStatus}</p>}
-        </form>
-      </aside>
     </section>
   );
 }
@@ -327,8 +277,6 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authStatus, setAuthStatus] = useState('');
-  const [interestStatus, setInterestStatus] = useState('');
-  const [interestForm, setInterestForm] = useState({ name: '', email: '', company: '', message: '' });
 
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname);
@@ -375,24 +323,6 @@ export default function App() {
       }
     } catch (e) {
       setAuthStatus(e.message || 'Authentication failed.');
-    }
-  };
-
-  const submitInterest = async (e) => {
-    e.preventDefault();
-    setInterestStatus('Sending...');
-    try {
-      const res = await fetch(`${API_BASE}/interest`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(interestForm),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Failed to send.');
-      setInterestStatus('Thanks. Your request was submitted.');
-      setInterestForm({ name: '', email: '', company: '', message: '' });
-    } catch (e2) {
-      setInterestStatus(e2.message || 'Could not submit form.');
     }
   };
 
@@ -443,7 +373,7 @@ export default function App() {
       </StaticPage>
     );
   } else {
-    content = <HomePage interestForm={interestForm} setInterestForm={setInterestForm} interestStatus={interestStatus} onSubmitInterest={submitInterest} />;
+    content = <MarketingHomePage onPrimaryCta={() => navigate('/signup')} />;
   }
 
   return (

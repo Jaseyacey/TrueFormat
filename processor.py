@@ -50,6 +50,7 @@ SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
 SUPABASE_AUTH_AUD = os.getenv("SUPABASE_AUTH_AUD", "authenticated")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+SUPABASE_DEV_TRUST_CLAIMS = os.getenv("SUPABASE_DEV_TRUST_CLAIMS", "").lower() in {"1", "true", "yes"}
 auth_scheme = HTTPBearer(auto_error=False)
 
 
@@ -125,13 +126,22 @@ def _parse_supabase_token(token: str) -> dict | None:
         return None
 
 
-def _validate_supabase_token_remote(token: str) -> dict | None:
+def _decode_unverified_jwt_claims(token: str) -> dict | None:
+    try:
+        _header_b64, payload_b64, _sig_b64 = token.split(".", 2)
+        payload = json.loads(_b64url_decode(payload_b64).decode("utf-8"))
+        return payload if isinstance(payload, dict) else None
+    except Exception:
+        return None
+
+
+def _validate_supabase_token_remote(token: str) -> tuple[dict | None, str | None]:
     """
     Validate token via Supabase Auth API. Supports asymmetric JWT projects
     (e.g. ES256) where local HMAC verification is not applicable.
     """
     if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-        return None
+        return None, "SUPABASE_URL/SUPABASE_ANON_KEY not configured on backend"
 
     req = Request(
         f"{SUPABASE_URL}/auth/v1/user",
@@ -144,11 +154,15 @@ def _validate_supabase_token_remote(token: str) -> dict | None:
     try:
         with urlopen(req, timeout=8) as resp:
             if resp.status != 200:
-                return None
+                return None, f"Supabase /auth/v1/user returned status {resp.status}"
             payload = json.loads(resp.read().decode("utf-8"))
-            return payload if isinstance(payload, dict) else None
-    except (HTTPError, URLError, TimeoutError, ValueError):
-        return None
+            return (payload if isinstance(payload, dict) else None), None
+    except HTTPError as e:
+        return None, f"Supabase auth HTTPError {e.code}"
+    except URLError as e:
+        return None, f"Supabase auth URLError: {e.reason}"
+    except (TimeoutError, ValueError):
+        return None, "Supabase auth request failed"
 
 
 def get_current_user(
@@ -160,15 +174,24 @@ def get_current_user(
     token = credentials.credentials
     payload = _parse_supabase_token(token)
     if not payload:
-        payload = _validate_supabase_token_remote(token)
+        payload, remote_error = _validate_supabase_token_remote(token)
+    else:
+        remote_error = None
 
     email = _normalize_email(payload.get("email", "")) if payload else None
     if not email:
+        claims = _decode_unverified_jwt_claims(token) or {}
+        exp = int(claims.get("exp", 0)) if claims.get("exp") else 0
+        if exp and exp <= int(time.time()):
+            raise HTTPException(status_code=401, detail="Supabase token expired. Please log in again.")
+        if SUPABASE_DEV_TRUST_CLAIMS and claims.get("email"):
+            # Development-only fallback when backend cannot reach Supabase Auth.
+            return _normalize_email(claims.get("email", ""))
         raise HTTPException(
             status_code=401,
             detail=(
                 "Invalid or expired Supabase token. "
-                "If your project uses asymmetric JWT signing, set SUPABASE_URL and SUPABASE_ANON_KEY on backend."
+                f"{remote_error or 'Token verification failed'}."
             ),
         )
     return email
