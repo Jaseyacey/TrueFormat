@@ -1,2 +1,7 @@
 .env
 frontend/.env
+
+# Python virtual environments
+.venv/
+venv/
+env/

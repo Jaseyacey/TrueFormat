@@ -89,6 +89,33 @@
   margin-bottom: 1rem;
 }
 
+.drop-zone {
+  min-width: 260px;
+  padding: 0.75rem 0.9rem;
+  border: 1px dashed rgba(125, 211, 252, 0.6);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.55);
+  transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+.drop-zone.is-dragging {
+  border-color: rgba(56, 189, 248, 0.95);
+  background: rgba(14, 116, 144, 0.25);
+  transform: translateY(-1px);
+}
+
+.drop-zone-title {
+  margin: 0;
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.drop-zone-subtitle {
+  margin: 0.2rem 0 0;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
 .file-input {
   max-width: 440px;
   color: #e2e8f0;

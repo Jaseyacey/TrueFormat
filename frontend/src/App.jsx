@@ -107,6 +107,7 @@ function AuthPage({ mode, email, setEmail, password, setPassword, authStatus, on
 
 function AppWorkspace({ token }) {
   const [file, setFile] = useState(null);
+  const [isDraggingPdf, setIsDraggingPdf] = useState(false);
   const [sourceColumns, setSourceColumns] = useState([]);
   const [suggestedMapping, setSuggestedMapping] = useState({});
   const [preview, setPreview] = useState([]);
@@ -118,9 +119,28 @@ function AppWorkspace({ token }) {
 
   const authHeader = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
+  const handleFilePick = (nextFile) => {
+    if (!nextFile) return;
+    setError('');
+    setFile(nextFile);
+  };
+
+  const handlePdfDrop = (event) => {
+    event.preventDefault();
+    setIsDraggingPdf(false);
+    const droppedFile = event.dataTransfer.files?.[0];
+    if (!droppedFile) return;
+    const isPdf = droppedFile.type === 'application/pdf' || droppedFile.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      setError('Drag-and-drop accepts PDF files only. Use Choose File for CSV/XLSX.');
+      return;
+    }
+    handleFilePick(droppedFile);
+  };
+
   const handleUpload = async () => {
     if (!file) {
-      setError('Please choose a file first.');
+      setError('Please choose or drop a file first.');
       return;
     }
     setError('');
@@ -212,14 +232,34 @@ function AppWorkspace({ token }) {
     <section className="app-shell">
       <h1 className="app-title">TrueFormat – Secure Data Extraction</h1>
       <div className="upload-row">
+        <div
+          className={`drop-zone ${isDraggingPdf ? 'is-dragging' : ''}`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDraggingPdf(true);
+          }}
+          onDragEnter={(e) => {
+            e.preventDefault();
+            setIsDraggingPdf(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            setIsDraggingPdf(false);
+          }}
+          onDrop={handlePdfDrop}
+        >
+          <p className="drop-zone-title">Drag and drop a PDF here</p>
+          <p className="drop-zone-subtitle">Or use Choose File for CSV, XLSX, or PDF</p>
+        </div>
         <input
           className="file-input"
           type="file"
           accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/pdf"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
+          onChange={(e) => handleFilePick(e.target.files?.[0] || null)}
         />
         <button className="btn btn-primary" onClick={handleUpload}>Upload & Auto-map</button>
       </div>
+      {file && <p className="muted">Selected file: {file.name}</p>}
       {status && <p className="status-text">{status}</p>}
       {error && <p className="error-text">{error}</p>}
       {sourceColumns.length > 0 && (
