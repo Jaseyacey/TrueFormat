@@ -95,38 +95,38 @@ export default function MarketingHomePage({ onPrimaryCta }) {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_20%,rgba(56,189,248,0.16),transparent_46%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_90%_8%,rgba(5,150,105,0.22),transparent_44%)]" />
 
-      <main className="relative mx-auto max-w-6xl space-y-10 px-6 pb-14 pt-8 lg:px-10 lg:pt-10">
-        <section className="grid gap-8 rounded-2xl border border-white/10 bg-[#059669]/10 p-8 lg:grid-cols-12 lg:p-10">
+      <main className="relative mx-auto max-w-6xl space-y-8 px-4 pb-12 pt-6 sm:px-6 lg:space-y-10 lg:px-10 lg:pt-10">
+        <section className="grid gap-8 rounded-2xl border border-white/10 bg-[#059669]/10 p-5 sm:p-8 lg:grid-cols-12 lg:p-10">
           <div className="lg:col-span-8">
-            <div className="mb-6 flex items-center gap-4">
+            <div className="mb-6 flex flex-wrap items-center gap-4">
               <span className="inline-flex h-16 w-16 items-center justify-center rounded-full border border-[#38BDF8]/40 bg-[#1f2e4a] shadow-[0_0_28px_rgba(56,189,248,0.2)]">
                 <img src="/trueformat-logo.svg" alt="TrueFormat logo" className="h-12 w-12 rounded-full" />
               </span>
-              <p className="inline-flex min-h-12 items-center whitespace-nowrap rounded-full border border-[#38BDF8]/35 bg-[linear-gradient(90deg,rgba(5,150,105,0.35),rgba(5,150,105,0.2))] px-5 py-2 text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#8AA0B2] sm:px-7 sm:text-[13px] lg:text-[15px]">
+              <p className="inline-flex min-h-12 max-w-full items-center rounded-full border border-[#38BDF8]/35 bg-[linear-gradient(90deg,rgba(5,150,105,0.35),rgba(5,150,105,0.2))] px-4 py-2 text-center text-[10px] font-extrabold uppercase tracking-[0.15em] text-[#8AA0B2] sm:whitespace-nowrap sm:px-7 sm:text-[13px] sm:tracking-[0.22em] lg:text-[15px]">
                 Deterministic Data Ingestion
               </p>
             </div>
 
-            <h1 className="text-3xl font-black leading-tight tracking-tight text-[#F8FAFC] sm:text-5xl">
+            <h1 className="text-[2rem] font-black leading-tight tracking-tight text-[#F8FAFC] sm:text-5xl">
               Digital Locksmith For
               <br />
               Supplier Data Integrity.
             </h1>
-            <p className="mt-5 max-w-2xl text-lg leading-relaxed text-[#CBD5E1]">
+            <p className="mt-5 max-w-2xl text-base leading-relaxed text-[#CBD5E1] sm:text-lg">
               Format hardening for CSV and PDF ingestion. TrueFormat eliminates rounding loss,
               date ambiguity, and leading-zero corruption before your ERP import.
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <button
                 onClick={onPrimaryCta}
-                className="rounded-lg bg-[#38BDF8] px-6 py-3 text-sm font-bold text-[#020617] transition hover:bg-[#7DD3FC]"
+                className="rounded-lg bg-[#38BDF8] px-6 py-3 text-sm font-bold text-[#020617] transition hover:bg-[#7DD3FC] sm:w-auto"
               >
                 Start Pilot
               </button>
               <button
                 onClick={onPrimaryCta}
-                className="rounded-lg border border-white/20 px-6 py-3 text-sm font-semibold text-[#CBD5E1] transition hover:border-[#38BDF8] hover:text-[#F8FAFC]"
+                className="rounded-lg border border-white/20 px-6 py-3 text-sm font-semibold text-[#CBD5E1] transition hover:border-[#38BDF8] hover:text-[#F8FAFC] sm:w-auto"
               >
                 Request Demo
               </button>
