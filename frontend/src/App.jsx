@@ -2,9 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import ColumnMapper from './ColumnMapper.jsx';
 import { supabase, supabaseConfigured } from './supabaseClient.js';
 import MarketingHomePage from './MarketingHomePage.jsx';
-import './App.css';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000';
 const TARGET_SCHEMA = ['transaction_id', 'date', 'description', 'quantity', 'amount', 'line_total', 'customer_name'];
 
 function navigate(path) {
@@ -23,7 +22,11 @@ async function getApiError(res, fallback) {
 
 function NavLink({ path, children }) {
   return (
-    <button className="link-btn" onClick={() => navigate(path)}>
+    <button
+      type="button"
+      className="rounded-lg px-3 py-2 text-sm font-medium text-[#94A3B8] transition hover:bg-white/5 hover:text-[#F8FAFC]"
+      onClick={() => navigate(path)}
+    >
       {children}
     </button>
   );
@@ -31,9 +34,15 @@ function NavLink({ path, children }) {
 
 function TopNav({ authed, onLogout }) {
   return (
-    <header className="top-nav">
-      <button className="brand-btn" onClick={() => navigate('/')}>TrueFormat</button>
-      <nav className="top-links">
+    <header className="sticky top-3 z-50 mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#38BDF8]/20 bg-[linear-gradient(90deg,#020617_0%,#03122d_55%,#020617_100%)] px-4 py-3 backdrop-blur-md">
+      <button type="button" className="flex items-center gap-3" onClick={() => navigate('/')}>
+        <span className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#38BDF8]/40 bg-[#0f1f3a] shadow-[0_0_20px_rgba(56,189,248,0.22)]">
+          <img src="/trueformat-logo.svg" alt="TrueFormat logo" className="h-8 w-8 rounded-full" />
+        </span>
+        <span className="text-3xl font-black leading-none tracking-tight text-[#F8FAFC] sm:text-4xl">TrueFormat</span>
+      </button>
+
+      <nav className="flex flex-wrap items-center gap-1">
         <NavLink path="/">Home</NavLink>
         <NavLink path="/blog">Blog</NavLink>
         <NavLink path="/terms">Terms</NavLink>
@@ -41,12 +50,31 @@ function TopNav({ authed, onLogout }) {
         {authed ? (
           <>
             <NavLink path="/app">App</NavLink>
-            <button className="btn btn-ghost" onClick={onLogout}>Log out</button>
+            <button
+              type="button"
+              className="rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-[#94A3B8] transition hover:border-[#38BDF8] hover:text-[#F8FAFC]"
+              onClick={onLogout}
+            >
+              Log out
+            </button>
           </>
         ) : (
           <>
             <NavLink path="/login">Log in</NavLink>
-            <button className="btn btn-primary" onClick={() => navigate('/signup')}>Get Started</button>
+            <button
+              type="button"
+              className="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold text-[#CBD5E1] transition hover:border-[#38BDF8] hover:text-[#F8FAFC]"
+              onClick={() => navigate('/signup')}
+            >
+              Request Demo
+            </button>
+            <button
+              type="button"
+              className="rounded-lg bg-[#38BDF8] px-4 py-2 text-sm font-semibold text-[#020617] transition hover:bg-[#475569]"
+              onClick={() => navigate('/signup')}
+            >
+              Get Started
+            </button>
           </>
         )}
       </nav>
@@ -56,9 +84,9 @@ function TopNav({ authed, onLogout }) {
 
 function ConfigErrorPage() {
   return (
-    <section className="static-card">
-      <h2 className="section-title">Frontend Config Missing</h2>
-      <div className="page-copy">
+    <section className="rounded-2xl border border-[#EF4444]/40 bg-[#EF4444]/10 p-6 text-[#EF4444]">
+      <h2 className="mb-3 text-xl font-semibold">Frontend Config Missing</h2>
+      <div className="space-y-2 text-sm">
         <p>Add these keys to <code>frontend/.env</code>:</p>
         <p><code>VITE_SUPABASE_URL=...</code></p>
         <p><code>VITE_SUPABASE_ANON_KEY=...</code></p>
@@ -69,12 +97,18 @@ function ConfigErrorPage() {
 }
 
 function AuthPage({ mode, email, setEmail, password, setPassword, authStatus, onSubmit }) {
+  const inputClass =
+    'w-full rounded-lg border border-white/15 bg-[#27272A]/65 px-3 py-2 text-sm text-[#F8FAFC] outline-none transition focus:border-[#38BDF8] focus:ring-2 focus:ring-[#38BDF8]/30';
+
   return (
-    <section className="auth-card">
-      <h2 className="section-title">{mode === 'login' ? 'Log in to TrueFormat' : 'Create your TrueFormat account'}</h2>
-      <form className="stack-form" onSubmit={onSubmit}>
+    <section className="mx-auto w-full max-w-xl rounded-2xl border border-white/10 bg-[#27272A]/55 p-7 backdrop-blur-md">
+      <h2 className="mb-4 text-2xl font-semibold text-[#F8FAFC]">
+        {mode === 'login' ? 'Log in to TrueFormat' : 'Create your TrueFormat account'}
+      </h2>
+
+      <form className="grid gap-3" onSubmit={onSubmit}>
         <input
-          className="mapper-input"
+          className={inputClass}
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -82,7 +116,7 @@ function AuthPage({ mode, email, setEmail, password, setPassword, authStatus, on
           required
         />
         <input
-          className="mapper-input"
+          className={inputClass}
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -90,18 +124,50 @@ function AuthPage({ mode, email, setEmail, password, setPassword, authStatus, on
           minLength={8}
           required
         />
-        <button className="btn btn-primary" type="submit">
+        <button
+          className="rounded-lg bg-[#38BDF8] px-4 py-2 text-sm font-semibold text-[#020617] transition hover:bg-[#475569]"
+          type="submit"
+        >
           {mode === 'login' ? 'Log in' : 'Sign up'}
         </button>
       </form>
-      {authStatus && <p className="status-text">{authStatus}</p>}
-      <p className="muted">
+
+      {authStatus && <p className="mt-3 text-sm font-medium text-[#94A3B8]">{authStatus}</p>}
+      <p className="mt-3 text-sm text-[#94A3B8]">
         {mode === 'login' ? 'New here?' : 'Already have an account?'}{' '}
-        <button className="link-btn" onClick={() => navigate(mode === 'login' ? '/signup' : '/login')}>
+        <button
+          type="button"
+          className="font-semibold text-[#38BDF8] underline underline-offset-2"
+          onClick={() => navigate(mode === 'login' ? '/signup' : '/login')}
+        >
           {mode === 'login' ? 'Create account' : 'Log in'}
         </button>
       </p>
     </section>
+  );
+}
+
+function NullPills({ nullCount }) {
+  const items = Object.entries(nullCount);
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {items.map(([col, count]) => {
+        const clean = Number(count) === 0;
+        return (
+          <span
+            key={col}
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
+              clean
+                ? 'border-[#38BDF8]/40 bg-[#38BDF8]/16 text-[#38BDF8]'
+                : 'border-amber-200/30 bg-amber-400/10 text-amber-200'
+            }`}
+          >
+            <span className="font-mono">{col}</span>
+            <span>{count}</span>
+          </span>
+        );
+      })}
+    </div>
   );
 }
 
@@ -116,6 +182,7 @@ function AppWorkspace({ token }) {
   const [error, setError] = useState('');
   const [finalMapping, setFinalMapping] = useState(null);
   const [rowCount, setRowCount] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
 
   const authHeader = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
@@ -144,7 +211,9 @@ function AppWorkspace({ token }) {
       return;
     }
     setError('');
-    setStatus('Uploading and analyzing columns...');
+    setIsUploading(true);
+    setStatus('Deterministic scan in progress...');
+
     const formData = new FormData();
     formData.append('file', file);
     try {
@@ -162,6 +231,8 @@ function AppWorkspace({ token }) {
     } catch (e) {
       setError(e.message || 'Failed to upload file.');
       setStatus('');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -172,6 +243,7 @@ function AppWorkspace({ token }) {
     }
     setError('');
     setStatus('Transforming data...');
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('mapping', JSON.stringify(finalMap));
@@ -201,6 +273,7 @@ function AppWorkspace({ token }) {
       return;
     }
     setStatus('Exporting CSV...');
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('mapping', JSON.stringify(finalMapping));
@@ -229,11 +302,19 @@ function AppWorkspace({ token }) {
   };
 
   return (
-    <section className="app-shell">
-      <h1 className="app-title">TrueFormat – Secure Data Extraction</h1>
-      <div className="upload-row">
+    <section className="rounded-2xl border border-white/10 bg-[#27272A]/55 p-6 backdrop-blur-md">
+      <div className="mb-4 flex items-center gap-3">
+        <img src="/trueformat-logo.svg" alt="TrueFormat logo" className="h-11 w-11 rounded-full bg-white/5 p-1" />
+        <h1 className="text-2xl font-black text-[#F8FAFC] sm:text-3xl">TrueFormat Secure Data Extraction</h1>
+      </div>
+
+      <div className="mb-2 flex flex-wrap items-center gap-3">
         <div
-          className={`drop-zone ${isDraggingPdf ? 'is-dragging' : ''}`}
+          className={`relative min-w-[260px] rounded-xl border p-4 transition ${
+            isDraggingPdf
+              ? 'border-[#38BDF8]/60 bg-[#059669]/26 shadow-[0_0_0_1px_rgba(56,189,248,0.2),0_0_26px_rgba(56,189,248,0.14)]'
+              : 'border-white/10 bg-[#059669]/14'
+          }`}
           onDragOver={(e) => {
             e.preventDefault();
             setIsDraggingPdf(true);
@@ -248,20 +329,35 @@ function AppWorkspace({ token }) {
           }}
           onDrop={handlePdfDrop}
         >
-          <p className="drop-zone-title">Drag and drop a PDF here</p>
-          <p className="drop-zone-subtitle">Or use Choose File for CSV, XLSX, or PDF</p>
+          {isUploading && (
+            <div className="pointer-events-none absolute inset-x-3 top-2 h-[2px] overflow-hidden rounded bg-[#38BDF8]/25">
+              <div className="scan-line h-full w-1/3 bg-[#38BDF8]" />
+            </div>
+          )}
+          <p className="font-semibold text-[#38BDF8]">Drag and drop a PDF here</p>
+          <p className="mt-1 text-sm text-[#94A3B8]">Or use Choose File for CSV, XLSX, or PDF</p>
         </div>
+
         <input
-          className="file-input"
+          className="max-w-full rounded-lg border border-white/15 bg-[#27272A]/65 px-3 py-2 text-sm text-[#F8FAFC]"
           type="file"
           accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/pdf"
           onChange={(e) => handleFilePick(e.target.files?.[0] || null)}
         />
-        <button className="btn btn-primary" onClick={handleUpload}>Upload & Auto-map</button>
+
+        <button
+          type="button"
+          className="rounded-lg bg-[#38BDF8] px-4 py-2 text-sm font-semibold text-[#020617] transition hover:bg-[#475569]"
+          onClick={handleUpload}
+        >
+          Upload & Auto-map
+        </button>
       </div>
-      {file && <p className="muted">Selected file: {file.name}</p>}
-      {status && <p className="status-text">{status}</p>}
-      {error && <p className="error-text">{error}</p>}
+
+      {file && <p className="text-sm text-[#94A3B8]">Selected file: {file.name}</p>}
+      {status && <p className="mt-2 text-sm font-semibold text-[#94A3B8]">{status}</p>}
+      {error && <p className="mt-2 text-sm font-semibold text-[#EF4444]">{error}</p>}
+
       {sourceColumns.length > 0 && (
         <ColumnMapper
           sourceColumns={sourceColumns}
@@ -270,32 +366,55 @@ function AppWorkspace({ token }) {
           onFinalize={handleFinalize}
         />
       )}
+
       {preview.length > 0 && (
-        <section className="preview-section">
-          <h2 className="section-title">Preview ({rowCount || preview.length} rows)</h2>
-          <div className="table-wrap">
-            <table className="preview-table">
+        <section className="mt-7">
+          <h2 className="mb-3 text-xl font-semibold text-[#F8FAFC]">Preview ({rowCount || preview.length} rows)</h2>
+
+          <div className="overflow-x-auto rounded-xl border border-white/10">
+            <table className="w-full border-collapse text-left text-sm">
               <thead>
-                <tr>{Object.keys(preview[0]).map((col) => <th key={col}>{col}</th>)}</tr>
+                <tr className="bg-[#059669]/24 text-[#38BDF8]">
+                  {Object.keys(preview[0]).map((col) => (
+                    <th key={col} className="px-3 py-3 font-semibold">
+                      {col}
+                    </th>
+                  ))}
+                </tr>
               </thead>
               <tbody>
                 {preview.map((row, idx) => (
-                  <tr key={idx}>
-                    {Object.keys(row).map((col) => (
-                      <td key={col}>{row[col] === null ? '' : String(row[col])}</td>
-                    ))}
+                  <tr key={idx} className="odd:bg-[#059669]/10 even:bg-[#020617]/20 hover:bg-[#059669]/18">
+                    {Object.keys(row).map((col) => {
+                      const raw = row[col] === null ? '' : String(row[col]);
+                      const txCell = col === 'transaction_id';
+                      return (
+                        <td
+                          key={col}
+                          className={`border-t border-white/10 px-3 py-2 font-mono text-xs ${
+                            txCell ? 'text-[#38BDF8]' : 'text-[#38BDF8]'
+                          }`}
+                        >
+                          {txCell ? <span className="rounded bg-[#059669]/25 px-1.5 py-0.5">{raw}</span> : raw}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <h3 className="section-title">Null counts</h3>
-          <ul className="null-list">
-            {Object.entries(nullCount).map(([col, count]) => (
-              <li key={col}><strong>{col}</strong>: {count}</li>
-            ))}
-          </ul>
-          <button className="btn btn-success" onClick={handleDownload}>Download CSV</button>
+
+          <h3 className="mt-4 text-lg font-semibold text-[#F8FAFC]">Null counts</h3>
+          <NullPills nullCount={nullCount} />
+
+          <button
+            type="button"
+            className="mt-5 rounded-lg bg-[#38BDF8] px-4 py-2 text-sm font-semibold text-[#020617] transition hover:bg-[#475569]"
+            onClick={handleDownload}
+          >
+            Download CSV
+          </button>
         </section>
       )}
     </section>
@@ -304,9 +423,9 @@ function AppWorkspace({ token }) {
 
 function StaticPage({ title, children }) {
   return (
-    <section className="static-card">
-      <h2 className="section-title">{title}</h2>
-      <div className="page-copy">{children}</div>
+    <section className="rounded-2xl border border-white/10 bg-[#27272A]/55 p-6 backdrop-blur-md">
+      <h2 className="mb-3 text-2xl font-semibold text-[#F8FAFC]">{title}</h2>
+      <div className="space-y-2 text-[#94A3B8]">{children}</div>
     </section>
   );
 }
@@ -344,12 +463,11 @@ export default function App() {
     }
     setAuthStatus('Processing...');
     try {
-      let authResult;
-      if (mode === 'register') {
-        authResult = await supabase.auth.signUp({ email, password });
-      } else {
-        authResult = await supabase.auth.signInWithPassword({ email, password });
-      }
+      const authResult =
+        mode === 'register'
+          ? await supabase.auth.signUp({ email, password })
+          : await supabase.auth.signInWithPassword({ email, password });
+
       if (authResult.error) throw authResult.error;
       const accessToken = authResult.data.session?.access_token || '';
       if (accessToken) {
@@ -367,14 +485,22 @@ export default function App() {
   };
 
   const onLogout = async () => {
-    if (supabase) await supabase.auth.signOut();
-    setToken('');
-    navigate('/');
+    try {
+      if (supabase) await supabase.auth.signOut();
+    } catch {
+      // Fall through: local session state is still cleared below.
+    } finally {
+      setToken('');
+      setAuthStatus('');
+      setEmail('');
+      setPassword('');
+      navigate('/');
+    }
   };
 
   if (!supabaseConfigured) {
     return (
-      <div className="site-shell">
+      <div className="mx-auto w-[min(1180px,94vw)] py-6">
         <TopNav authed={false} onLogout={onLogout} />
         <ConfigErrorPage />
       </div>
@@ -383,11 +509,40 @@ export default function App() {
 
   let content;
   if (path === '/app') {
-    content = token ? <AppWorkspace token={token} /> : <AuthPage mode="login" {...{ email, setEmail, password, setPassword, authStatus }} onSubmit={(e) => { e.preventDefault(); submitAuth('login'); }} />;
+    content = token ? (
+      <AppWorkspace token={token} />
+    ) : (
+      <AuthPage
+        mode="login"
+        {...{ email, setEmail, password, setPassword, authStatus }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          submitAuth('login');
+        }}
+      />
+    );
   } else if (path === '/login') {
-    content = <AuthPage mode="login" {...{ email, setEmail, password, setPassword, authStatus }} onSubmit={(e) => { e.preventDefault(); submitAuth('login'); }} />;
+    content = (
+      <AuthPage
+        mode="login"
+        {...{ email, setEmail, password, setPassword, authStatus }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          submitAuth('login');
+        }}
+      />
+    );
   } else if (path === '/signup') {
-    content = <AuthPage mode="signup" {...{ email, setEmail, password, setPassword, authStatus }} onSubmit={(e) => { e.preventDefault(); submitAuth('register'); }} />;
+    content = (
+      <AuthPage
+        mode="signup"
+        {...{ email, setEmail, password, setPassword, authStatus }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          submitAuth('register');
+        }}
+      />
+    );
   } else if (path === '/terms') {
     content = (
       <StaticPage title="Terms of Service">
@@ -417,7 +572,7 @@ export default function App() {
   }
 
   return (
-    <div className="site-shell">
+    <div className="mx-auto w-[min(1180px,94vw)] py-6">
       <TopNav authed={Boolean(token)} onLogout={onLogout} />
       {content}
     </div>
