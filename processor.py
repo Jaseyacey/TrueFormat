@@ -547,7 +547,11 @@ def extract_pdf_tables_via_ocr(contents: bytes, max_pages: int | None = None) ->
     return df
 
 
-def extract_pdf_tables(contents: bytes, max_pages: int | None = None) -> pd.DataFrame:
+def extract_pdf_tables(
+    contents: bytes,
+    max_pages: int | None = None,
+    enable_ocr_fallback: bool = True,
+) -> pd.DataFrame:
     """
     Targeted extraction: Only extract the Line Items table, not metadata.
     Uses keyword matching to identify the correct table.
@@ -606,8 +610,13 @@ def extract_pdf_tables(contents: bytes, max_pages: int | None = None) -> pd.Data
         raise ValueError(f"Could not read PDF file. {e}")
 
     if not all_tables:
-        # Fallback for scanned/image-only PDFs.
-        return extract_pdf_tables_via_ocr(contents, max_pages=max_pages)
+        if enable_ocr_fallback:
+            # Fallback for scanned/image-only PDFs.
+            return extract_pdf_tables_via_ocr(contents, max_pages=max_pages)
+        raise ValueError(
+            "No line-item table detected quickly during upload. "
+            "Continue to transform/export for full OCR processing."
+        )
     
     # Combine only the relevant line-item tables
     df = pd.concat(all_tables, ignore_index=True)
@@ -692,12 +701,20 @@ def extract_pdf_tables(contents: bytes, max_pages: int | None = None) -> pd.Data
     
     return df
 
-def clean_and_load(file: UploadFile, max_pages: int | None = None) -> pd.DataFrame:
+def clean_and_load(
+    file: UploadFile,
+    max_pages: int | None = None,
+    enable_ocr_fallback: bool = True,
+) -> pd.DataFrame:
     """Loads file while preventing 15-digit rounding and date-flipping."""
     contents = file.file.read()
     
     if file.filename.lower().endswith(".pdf"):
-        return extract_pdf_tables(contents, max_pages=max_pages)
+        return extract_pdf_tables(
+            contents,
+            max_pages=max_pages,
+            enable_ocr_fallback=enable_ocr_fallback,
+        )
     
     # Read everything as string to prevent scientific notation on IDs
     if file.filename.endswith(".xlsx"):
@@ -851,7 +868,11 @@ async def upload_file(file: UploadFile = File(...), current_user: str = Depends(
     """Initial upload to identify headers and suggest mapping."""
     try:
         # Fast path for mapping suggestion: sample first pages only.
-        df = clean_and_load(file, max_pages=UPLOAD_PAGE_LIMIT)
+        df = clean_and_load(
+            file,
+            max_pages=UPLOAD_PAGE_LIMIT,
+            enable_ocr_fallback=False,
+        )
         source_columns = list(df.columns)
         
         # Include all columns in the dropdown, including extracted metadata
