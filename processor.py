@@ -67,6 +67,10 @@ SUPABASE_AUTH_AUD = os.getenv("SUPABASE_AUTH_AUD", "authenticated")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 SUPABASE_DEV_TRUST_CLAIMS = os.getenv("SUPABASE_DEV_TRUST_CLAIMS", "").lower() in {"1", "true", "yes"}
+try:
+    UPLOAD_PAGE_LIMIT = max(1, int(os.getenv("UPLOAD_PAGE_LIMIT", "2")))
+except ValueError:
+    UPLOAD_PAGE_LIMIT = 2
 auth_scheme = HTTPBearer(auto_error=False)
 
 
@@ -217,14 +221,16 @@ init_db()
 
 # --- HELPER FUNCTIONS (The "Integrity Engine") ---
 
-def extract_customer_name_from_pdf(contents: bytes) -> str | None:
+def extract_customer_name_from_pdf(contents: bytes, max_pages: int | None = None) -> str | None:
     """
     Extract customer name from PDF text by looking for common patterns
     like 'Bill To:', 'Customer:', or company names in the header area.
     """
     try:
         with pdfplumber.open(io.BytesIO(contents)) as pdf:
-            for page in pdf.pages:
+            for page_idx, page in enumerate(pdf.pages):
+                if max_pages is not None and page_idx >= max_pages:
+                    break
                 text = page.extract_text()
                 if not text:
                     continue
@@ -272,14 +278,16 @@ def _parse_date_str(date_str: str) -> str | None:
     return date_str if date_str else None
 
 
-def extract_invoice_date_from_pdf(contents: bytes) -> str | None:
+def extract_invoice_date_from_pdf(contents: bytes, max_pages: int | None = None) -> str | None:
     """
     Extract invoice date from PDF text. Looks for date on same line as keywords
     (e.g. 'Invoice Date 10/02/2026') and in the first 50 lines.
     """
     try:
         with pdfplumber.open(io.BytesIO(contents)) as pdf:
-            for page in pdf.pages:
+            for page_idx, page in enumerate(pdf.pages):
+                if max_pages is not None and page_idx >= max_pages:
+                    break
                 text = page.extract_text()
                 if not text:
                     continue
@@ -329,7 +337,7 @@ def extract_invoice_date_from_pdf(contents: bytes) -> str | None:
     return None
 
 
-def _extract_ocr_tokens_from_pdf(contents: bytes) -> list[dict]:
+def _extract_ocr_tokens_from_pdf(contents: bytes, max_pages: int | None = None) -> list[dict]:
     """Extract OCR tokens with coordinates from an image-only PDF."""
     if np is None or pdfium is None or RapidOCR is None:
         return []
@@ -338,7 +346,8 @@ def _extract_ocr_tokens_from_pdf(contents: bytes) -> list[dict]:
     try:
         doc = pdfium.PdfDocument(contents)
         ocr = RapidOCR()
-        for page_num in range(len(doc)):
+        page_count = len(doc) if max_pages is None else min(len(doc), max_pages)
+        for page_num in range(page_count):
             page = doc[page_num]
             bitmap = page.render(scale=2.5)
             image = np.array(bitmap.to_pil())
@@ -410,12 +419,12 @@ def _extract_metadata_from_ocr_tokens(tokens: list[dict]) -> tuple[str | None, s
     return customer_name, invoice_date
 
 
-def extract_pdf_tables_via_ocr(contents: bytes) -> pd.DataFrame:
+def extract_pdf_tables_via_ocr(contents: bytes, max_pages: int | None = None) -> pd.DataFrame:
     """
     OCR fallback for scanned/image PDFs.
     Uses header X-positions to map row tokens into structured line-item columns.
     """
-    tokens = _extract_ocr_tokens_from_pdf(contents)
+    tokens = _extract_ocr_tokens_from_pdf(contents, max_pages=max_pages)
     if not tokens:
         raise ValueError(
             "No readable text or table found. This appears to be a scanned PDF and OCR is unavailable."
@@ -538,7 +547,7 @@ def extract_pdf_tables_via_ocr(contents: bytes) -> pd.DataFrame:
     return df
 
 
-def extract_pdf_tables(contents: bytes) -> pd.DataFrame:
+def extract_pdf_tables(contents: bytes, max_pages: int | None = None) -> pd.DataFrame:
     """
     Targeted extraction: Only extract the Line Items table, not metadata.
     Uses keyword matching to identify the correct table.
@@ -551,11 +560,13 @@ def extract_pdf_tables(contents: bytes) -> pd.DataFrame:
     try:
         with pdfplumber.open(io.BytesIO(contents)) as pdf:
             # First pass: Extract metadata from text (customer name and invoice date)
-            customer_name = extract_customer_name_from_pdf(contents)
-            invoice_date = extract_invoice_date_from_pdf(contents)
+            customer_name = extract_customer_name_from_pdf(contents, max_pages=max_pages)
+            invoice_date = extract_invoice_date_from_pdf(contents, max_pages=max_pages)
             
             # Second pass: Extract line items table
-            for page in pdf.pages:
+            for page_idx, page in enumerate(pdf.pages):
+                if max_pages is not None and page_idx >= max_pages:
+                    break
                 tables = page.extract_tables()
                 if not tables:
                     continue
@@ -596,7 +607,7 @@ def extract_pdf_tables(contents: bytes) -> pd.DataFrame:
 
     if not all_tables:
         # Fallback for scanned/image-only PDFs.
-        return extract_pdf_tables_via_ocr(contents)
+        return extract_pdf_tables_via_ocr(contents, max_pages=max_pages)
     
     # Combine only the relevant line-item tables
     df = pd.concat(all_tables, ignore_index=True)
@@ -681,12 +692,12 @@ def extract_pdf_tables(contents: bytes) -> pd.DataFrame:
     
     return df
 
-def clean_and_load(file: UploadFile) -> pd.DataFrame:
+def clean_and_load(file: UploadFile, max_pages: int | None = None) -> pd.DataFrame:
     """Loads file while preventing 15-digit rounding and date-flipping."""
     contents = file.file.read()
     
     if file.filename.lower().endswith(".pdf"):
-        return extract_pdf_tables(contents)
+        return extract_pdf_tables(contents, max_pages=max_pages)
     
     # Read everything as string to prevent scientific notation on IDs
     if file.filename.endswith(".xlsx"):
@@ -839,7 +850,8 @@ async def submit_interest(payload: InterestRequest):
 async def upload_file(file: UploadFile = File(...), current_user: str = Depends(get_current_user)):
     """Initial upload to identify headers and suggest mapping."""
     try:
-        df = clean_and_load(file)
+        # Fast path for mapping suggestion: sample first pages only.
+        df = clean_and_load(file, max_pages=UPLOAD_PAGE_LIMIT)
         source_columns = list(df.columns)
         
         # Include all columns in the dropdown, including extracted metadata
