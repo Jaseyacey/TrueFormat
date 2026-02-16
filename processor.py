@@ -71,10 +71,7 @@ try:
     UPLOAD_PAGE_LIMIT = max(1, int(os.getenv("UPLOAD_PAGE_LIMIT", "2")))
 except ValueError:
     UPLOAD_PAGE_LIMIT = 2
-try:
-    UPLOAD_OCR_PAGE_LIMIT = max(1, int(os.getenv("UPLOAD_OCR_PAGE_LIMIT", "1")))
-except ValueError:
-    UPLOAD_OCR_PAGE_LIMIT = 1
+ALLOW_SCANNED_PDFS = os.getenv("ALLOW_SCANNED_PDFS", "false").lower() in {"1", "true", "yes"}
 auth_scheme = HTTPBearer(auto_error=False)
 
 
@@ -678,12 +675,11 @@ def extract_pdf_tables(
         raise ValueError(f"Could not read PDF file. {e}")
 
     if not all_tables:
-        if enable_ocr_fallback:
+        if enable_ocr_fallback and ALLOW_SCANNED_PDFS:
             # Fallback for scanned/image-only PDFs.
             return extract_pdf_tables_via_ocr(contents, max_pages=max_pages)
         raise ValueError(
-            "No line-item table detected quickly during upload. "
-            "Continue to transform/export for full OCR processing."
+            "Scanned/image PDFs are not supported yet. Please upload a text-based PDF."
         )
     
     # Combine only the relevant line-item tables
@@ -936,22 +932,11 @@ async def upload_file(file: UploadFile = File(...), current_user: str = Depends(
     """Initial upload to identify headers and suggest mapping."""
     try:
         # Fast path for mapping suggestion: sample first pages only.
-        try:
-            df = clean_and_load(
-                file,
-                max_pages=UPLOAD_PAGE_LIMIT,
-                enable_ocr_fallback=False,
-            )
-        except ValueError as exc:
-            # Scanned/image-heavy PDFs may need OCR even for mapping.
-            if "No line-item table detected quickly during upload" not in str(exc):
-                raise
-            file.file.seek(0)
-            df = clean_and_load(
-                file,
-                max_pages=UPLOAD_OCR_PAGE_LIMIT,
-                enable_ocr_fallback=True,
-            )
+        df = clean_and_load(
+            file,
+            max_pages=UPLOAD_PAGE_LIMIT,
+            enable_ocr_fallback=False,
+        )
         source_columns = list(df.columns)
         
         # Include all columns in the dropdown, including extracted metadata
