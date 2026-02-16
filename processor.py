@@ -435,20 +435,65 @@ def extract_pdf_tables_via_ocr(contents: bytes, max_pages: int | None = None) ->
         )
 
     customer_name, invoice_date = _extract_metadata_from_ocr_tokens(tokens)
-    page_tokens = [t for t in tokens if t["page"] == 0]
-    page_tokens.sort(key=lambda t: (t["y"], t["x"]))
 
-    # Locate table header row (Product / Quantity / Price / Total).
-    header_tokens = [t for t in page_tokens if t["text"].strip().lower() in {"prod code", "product", "quantity", "price", "total"}]
-    if not header_tokens:
+    def _header_key(text: str) -> str | None:
+        tl = text.strip().lower()
+        if not tl:
+            return None
+        if any(k in tl for k in ("description", "details", "item", "product", "service")):
+            return "description"
+        if any(k in tl for k in ("qty", "quantity")):
+            return "quantity"
+        if any(k in tl for k in ("unit price", "price", "rate", "amount")):
+            return "price"
+        if any(k in tl for k in ("line total", "total", "net", "value")):
+            return "total"
+        if "code" in tl or tl in {"#", "no"}:
+            return "code"
+        return None
+
+    page_tokens: list[dict] = []
+    header_band: list[dict] = []
+    header_y = 0.0
+
+    pages = sorted({int(t["page"]) for t in tokens})
+    for page_no in pages:
+        current_page_tokens = [t for t in tokens if int(t["page"]) == page_no]
+        current_page_tokens.sort(key=lambda t: (t["y"], t["x"]))
+        if not current_page_tokens:
+            continue
+
+        candidate_headers = [t for t in current_page_tokens if _header_key(t["text"]) is not None]
+        if not candidate_headers:
+            continue
+
+        # Find the densest header-like row by Y band.
+        candidate_headers.sort(key=lambda t: t["y"])
+        best_band = []
+        best_keys: set[str] = set()
+        for center in candidate_headers:
+            band = [t for t in candidate_headers if abs(t["y"] - center["y"]) <= 18]
+            keys = {_header_key(t["text"]) for t in band}
+            keys.discard(None)
+            if len(keys) > len(best_keys):
+                best_band = band
+                best_keys = set(keys)
+
+        # Need at least two semantic headers (for example description + total).
+        if len(best_keys) >= 2:
+            page_tokens = current_page_tokens
+            header_band = best_band
+            header_y = sum(t["y"] for t in best_band) / len(best_band)
+            break
+
+    if not header_band:
         raise ValueError("OCR could not locate line-item headers in this scanned PDF.")
 
-    header_y = min(t["y"] for t in header_tokens)
-    header_band = [t for t in header_tokens if abs(t["y"] - header_y) <= 25]
-    anchors = {}
-    for t in header_band:
-        key = t["text"].strip().lower()
-        anchors[key] = t["x"]
+    anchors: dict[str, float] = {}
+    for t in sorted(header_band, key=lambda x: x["x"]):
+        key = _header_key(t["text"])
+        if key and key not in anchors:
+            anchors[key] = t["x"]
 
     stop_y = None
     for t in page_tokens:
@@ -507,9 +552,9 @@ def extract_pdf_tables_via_ocr(contents: bytes, max_pages: int | None = None) ->
             # Use header x-anchors when available.
             if is_numeric and "quantity" in anchors and abs(x - anchors["quantity"]) < 90:
                 qty_candidates.append(tx)
-            elif is_numeric and "price" in anchors and abs(x - anchors["price"]) < 100:
+            elif is_numeric and "price" in anchors and abs(x - anchors["price"]) < 120:
                 price_candidates.append(tx)
-            elif is_numeric and "total" in anchors and abs(x - anchors["total"]) < 110:
+            elif is_numeric and "total" in anchors and abs(x - anchors["total"]) < 140:
                 total_candidates.append(tx)
             else:
                 desc_parts.append(tx)
@@ -527,6 +572,25 @@ def extract_pdf_tables_via_ocr(contents: bytes, max_pages: int | None = None) ->
             t = total_candidates[0]
             tn = "".join(numeric_re.findall(t)).replace(",", "")
             record["Line total"] = tn
+
+        # Fallback when header anchors are imperfect: infer from left-to-right numeric order.
+        if not (record["Qty"] and record["Unit price"] and record["Line total"]):
+            numeric_tokens = []
+            for tok in row:
+                nums = numeric_re.findall(tok["text"])
+                if not nums:
+                    continue
+                cleaned = "".join(nums).replace(",", "")
+                if cleaned:
+                    numeric_tokens.append((tok["x"], cleaned))
+            numeric_tokens.sort(key=lambda n: n[0])
+            if numeric_tokens:
+                if not record["Line total"]:
+                    record["Line total"] = numeric_tokens[-1][1]
+                if len(numeric_tokens) >= 2 and not record["Unit price"]:
+                    record["Unit price"] = numeric_tokens[-2][1]
+                if len(numeric_tokens) >= 3 and not record["Qty"]:
+                    record["Qty"] = numeric_tokens[0][1]
 
         record["Description"] = " ".join(desc_parts).strip()
         if not any(record.values()):
