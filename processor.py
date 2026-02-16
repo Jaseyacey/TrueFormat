@@ -35,10 +35,23 @@ app = FastAPI()
 # Load local backend env file when present.
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-# SECURITY: Tighten origins in production
+cors_allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "")
+if cors_allowed_origins_env.strip():
+    CORS_ALLOWED_ORIGINS = [
+        origin.strip().rstrip("/")
+        for origin in cors_allowed_origins_env.split(",")
+        if origin.strip()
+    ]
+else:
+    # Local development defaults.
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,7 +60,8 @@ app.add_middleware(
 # PM NOTE: Removed empty string to prevent KeyError during transformation
 TARGET_SCHEMA = ["transaction_id", "date", "description", "quantity", "amount", "line_total", "customer_name"]
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "trueformat.db")
+# Use a mounted persistent path in production (for Render: /var/data/trueformat.db).
+DB_PATH = os.getenv("DB_PATH", os.path.join(os.path.dirname(__file__), "trueformat.db"))
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
 SUPABASE_AUTH_AUD = os.getenv("SUPABASE_AUTH_AUD", "authenticated")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
