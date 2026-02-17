@@ -26,6 +26,20 @@ services:
         sync: false
       - key: SUPABASE_ANON_KEY
         sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+      - key: OTP_HASH_SECRET
+        sync: false
+      - key: OTP_EXPIRY_SECONDS
+        value: "600"
+      - key: OTP_RESEND_COOLDOWN_SECONDS
+        value: "60"
+      - key: OTP_MAX_ATTEMPTS
+        value: "5"
 
   - type: static
     name: trueformat-frontend

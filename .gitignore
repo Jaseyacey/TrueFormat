@@ -5,3 +5,5 @@ frontend/.env
 .venv/
 venv/
 env/
+__pycache__/
+.pycache/

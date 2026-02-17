@@ -9,6 +9,8 @@ import sqlite3
 import hmac
 import base64
 import time
+import secrets
+import hashlib
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 import pandas as pd
@@ -35,19 +37,21 @@ app = FastAPI()
 # Load local backend env file when present.
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
+DEFAULT_CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
 cors_allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "")
-if cors_allowed_origins_env.strip():
-    CORS_ALLOWED_ORIGINS = [
-        origin.strip().rstrip("/")
-        for origin in cors_allowed_origins_env.split(",")
-        if origin.strip()
-    ]
-else:
-    # Local development defaults.
-    CORS_ALLOWED_ORIGINS = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
+configured_origins = [
+    origin.strip().rstrip("/")
+    for origin in cors_allowed_origins_env.split(",")
+    if origin.strip()
+]
+
+# Merge configured origins with local defaults instead of replacing them.
+# This prevents local Vite sessions from breaking when production origins are set.
+CORS_ALLOWED_ORIGINS = sorted({*DEFAULT_CORS_ALLOWED_ORIGINS, *configured_origins})
 
 app.add_middleware(
     CORSMiddleware,
@@ -66,6 +70,22 @@ SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
 SUPABASE_AUTH_AUD = os.getenv("SUPABASE_AUTH_AUD", "authenticated")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "")
+OTP_HASH_SECRET = os.getenv("OTP_HASH_SECRET", SUPABASE_JWT_SECRET or "dev-otp-secret")
+try:
+    OTP_EXPIRY_SECONDS = max(60, int(os.getenv("OTP_EXPIRY_SECONDS", "600")))
+except ValueError:
+    OTP_EXPIRY_SECONDS = 600
+try:
+    OTP_RESEND_COOLDOWN_SECONDS = max(5, int(os.getenv("OTP_RESEND_COOLDOWN_SECONDS", "60")))
+except ValueError:
+    OTP_RESEND_COOLDOWN_SECONDS = 60
+try:
+    OTP_MAX_ATTEMPTS = max(1, int(os.getenv("OTP_MAX_ATTEMPTS", "5")))
+except ValueError:
+    OTP_MAX_ATTEMPTS = 5
 SUPABASE_DEV_TRUST_CLAIMS = os.getenv("SUPABASE_DEV_TRUST_CLAIMS", "").lower() in {"1", "true", "yes"}
 try:
     UPLOAD_PAGE_LIMIT = max(1, int(os.getenv("UPLOAD_PAGE_LIMIT", "2")))
@@ -80,6 +100,21 @@ class InterestRequest(BaseModel):
     email: str
     company: str = Field(default="", max_length=200)
     message: str = Field(default="", max_length=3000)
+
+
+class SignupStartRequest(BaseModel):
+    email: str
+    password: str = Field(min_length=8, max_length=128)
+
+
+class SignupResendRequest(BaseModel):
+    email: str
+
+
+class SignupVerifyRequest(BaseModel):
+    email: str
+    password: str = Field(min_length=8, max_length=128)
+    code: str = Field(min_length=6, max_length=6)
 
 
 def _db_conn() -> sqlite3.Connection:
@@ -102,6 +137,18 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS signup_otp_codes (
+                email TEXT PRIMARY KEY,
+                code_hash TEXT NOT NULL,
+                expires_at INTEGER NOT NULL,
+                last_sent_at INTEGER NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL
+            )
+            """
+        )
         conn.commit()
 
 
@@ -110,6 +157,105 @@ def _normalize_email(raw: str) -> str:
     if "@" not in email or "." not in email.split("@")[-1]:
         raise HTTPException(status_code=422, detail="Valid email is required.")
     return email
+
+
+def _normalize_otp_code(raw: str) -> str:
+    code = (raw or "").strip()
+    if not re.fullmatch(r"\d{6}", code):
+        raise HTTPException(status_code=422, detail="Code must be a 6-digit number.")
+    return code
+
+
+def _otp_hash(email: str, code: str) -> str:
+    payload = f"{email}:{code}".encode("utf-8")
+    return hmac.new(OTP_HASH_SECRET.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+
+
+def _send_signup_otp_email(email: str, code: str) -> None:
+    if not RESEND_API_KEY:
+        raise HTTPException(status_code=500, detail="RESEND_API_KEY is not configured on backend.")
+    if not RESEND_FROM_EMAIL:
+        raise HTTPException(status_code=500, detail="RESEND_FROM_EMAIL is not configured on backend.")
+
+    payload = {
+        "from": RESEND_FROM_EMAIL,
+        "to": [email],
+        "subject": "Your TrueFormat verification code",
+        "text": (
+            f"Your TrueFormat verification code is {code}. "
+            f"It expires in {max(1, OTP_EXPIRY_SECONDS // 60)} minutes."
+        ),
+        "html": (
+            f"<p>Your TrueFormat verification code is "
+            f"<strong style='font-size:20px;letter-spacing:2px'>{code}</strong>.</p>"
+            f"<p>This code expires in {max(1, OTP_EXPIRY_SECONDS // 60)} minutes.</p>"
+        ),
+    }
+    req = Request(
+        "https://api.resend.com/emails",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(req, timeout=10) as resp:
+            if resp.status < 200 or resp.status >= 300:
+                raise HTTPException(status_code=502, detail=f"Resend email failed with status {resp.status}.")
+    except HTTPError as e:
+        try:
+            message = e.read().decode("utf-8")
+        except Exception:
+            message = ""
+        raise HTTPException(status_code=502, detail=f"Resend email failed ({e.code}). {message[:200]}".strip())
+    except URLError as e:
+        raise HTTPException(status_code=502, detail=f"Resend email failed: {e.reason}")
+    except TimeoutError:
+        raise HTTPException(status_code=502, detail="Resend email request timed out.")
+
+
+def _create_supabase_user(email: str, password: str) -> str:
+    if not SUPABASE_URL:
+        raise HTTPException(status_code=500, detail="SUPABASE_URL is not configured on backend.")
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        raise HTTPException(status_code=500, detail="SUPABASE_SERVICE_ROLE_KEY is not configured on backend.")
+
+    req = Request(
+        f"{SUPABASE_URL}/auth/v1/admin/users",
+        data=json.dumps(
+            {
+                "email": email,
+                "password": password,
+                "email_confirm": True,
+            }
+        ).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+            "apikey": SUPABASE_SERVICE_ROLE_KEY,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(req, timeout=10) as resp:
+            if resp.status < 200 or resp.status >= 300:
+                raise HTTPException(status_code=502, detail=f"Supabase user creation failed with status {resp.status}.")
+            return "created"
+    except HTTPError as e:
+        try:
+            body = e.read().decode("utf-8")
+        except Exception:
+            body = ""
+        body_lower = body.lower()
+        if e.code in (400, 409, 422) and ("already" in body_lower and "register" in body_lower):
+            return "exists"
+        raise HTTPException(status_code=502, detail=f"Supabase user creation failed ({e.code}). {body[:200]}".strip())
+    except URLError as e:
+        raise HTTPException(status_code=502, detail=f"Supabase user creation failed: {e.reason}")
+    except TimeoutError:
+        raise HTTPException(status_code=502, detail="Supabase user creation request timed out.")
 
 
 def _b64url_decode(value: str) -> bytes:
@@ -926,6 +1072,137 @@ async def submit_interest(payload: InterestRequest):
         )
         conn.commit()
     return {"status": "ok", "message": "Thanks. We received your interest form."}
+
+
+@app.post("/auth/signup/start")
+async def auth_signup_start(payload: SignupStartRequest):
+    email = _normalize_email(payload.email)
+    password = (payload.password or "").strip()
+    if len(password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters.")
+
+    now = int(time.time())
+    with _db_conn() as conn:
+        existing = conn.execute(
+            "SELECT email, last_sent_at FROM signup_otp_codes WHERE email = ?",
+            (email,),
+        ).fetchone()
+        if existing:
+            seconds_remaining = OTP_RESEND_COOLDOWN_SECONDS - max(0, now - int(existing["last_sent_at"]))
+            if seconds_remaining > 0:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Please wait {seconds_remaining}s before requesting another code.",
+                )
+
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    _send_signup_otp_email(email, code)
+    with _db_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO signup_otp_codes (email, code_hash, expires_at, last_sent_at, attempts, created_at)
+            VALUES (?, ?, ?, ?, 0, ?)
+            ON CONFLICT(email) DO UPDATE SET
+                code_hash = excluded.code_hash,
+                expires_at = excluded.expires_at,
+                last_sent_at = excluded.last_sent_at,
+                attempts = 0
+            """,
+            (
+                email,
+                _otp_hash(email, code),
+                now + OTP_EXPIRY_SECONDS,
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+    return {"status": "ok", "message": "Verification code sent."}
+
+
+@app.post("/auth/signup/resend")
+async def auth_signup_resend(payload: SignupResendRequest):
+    email = _normalize_email(payload.email)
+    now = int(time.time())
+    with _db_conn() as conn:
+        existing = conn.execute(
+            "SELECT email, last_sent_at FROM signup_otp_codes WHERE email = ?",
+            (email,),
+        ).fetchone()
+        if not existing:
+            raise HTTPException(status_code=400, detail="Start signup before requesting a resend.")
+        seconds_remaining = OTP_RESEND_COOLDOWN_SECONDS - max(0, now - int(existing["last_sent_at"]))
+        if seconds_remaining > 0:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Please wait {seconds_remaining}s before requesting another code.",
+            )
+
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    _send_signup_otp_email(email, code)
+    with _db_conn() as conn:
+        conn.execute(
+            """
+            UPDATE signup_otp_codes
+            SET code_hash = ?, expires_at = ?, last_sent_at = ?, attempts = 0
+            WHERE email = ?
+            """,
+            (_otp_hash(email, code), now + OTP_EXPIRY_SECONDS, now, email),
+        )
+        conn.commit()
+    return {"status": "ok", "message": "A new verification code was sent."}
+
+
+@app.post("/auth/signup/verify")
+async def auth_signup_verify(payload: SignupVerifyRequest):
+    email = _normalize_email(payload.email)
+    password = (payload.password or "").strip()
+    code = _normalize_otp_code(payload.code)
+    if len(password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters.")
+
+    now = int(time.time())
+    with _db_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT email, code_hash, expires_at, attempts
+            FROM signup_otp_codes
+            WHERE email = ?
+            """,
+            (email,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=400, detail="No active verification code found. Start signup again.")
+        if int(row["expires_at"]) <= now:
+            conn.execute("DELETE FROM signup_otp_codes WHERE email = ?", (email,))
+            conn.commit()
+            raise HTTPException(status_code=400, detail="Verification code expired. Request a new code.")
+        if int(row["attempts"]) >= OTP_MAX_ATTEMPTS:
+            conn.execute("DELETE FROM signup_otp_codes WHERE email = ?", (email,))
+            conn.commit()
+            raise HTTPException(status_code=429, detail="Too many failed attempts. Start signup again.")
+
+        expected_hash = row["code_hash"]
+        received_hash = _otp_hash(email, code)
+        if not hmac.compare_digest(expected_hash, received_hash):
+            conn.execute(
+                "UPDATE signup_otp_codes SET attempts = attempts + 1 WHERE email = ?",
+                (email,),
+            )
+            conn.commit()
+            raise HTTPException(status_code=400, detail="Invalid verification code.")
+
+    user_result = _create_supabase_user(email, password)
+    if user_result == "exists":
+        with _db_conn() as conn:
+            conn.execute("DELETE FROM signup_otp_codes WHERE email = ?", (email,))
+            conn.commit()
+        raise HTTPException(status_code=409, detail="Account already exists. Log in instead.")
+
+    with _db_conn() as conn:
+        conn.execute("DELETE FROM signup_otp_codes WHERE email = ?", (email,))
+        conn.commit()
+    return {"status": "ok", "message": "Email verified. Account created."}
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...), current_user: str = Depends(get_current_user)):
