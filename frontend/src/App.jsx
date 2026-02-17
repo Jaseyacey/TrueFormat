@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import ColumnMapper from './ColumnMapper.jsx';
 import { supabase, supabaseConfigured } from './supabaseClient.js';
 import MarketingHomePage from './MarketingHomePage.jsx';
+import BlogMappingMess from './BlogMappingMess.jsx';
 
 const API_BASE = (import.meta.env.VITE_API_BASE
   || (import.meta.env.PROD ? 'https://trueformat.onrender.com' : 'http://127.0.0.1:8000')
@@ -562,13 +563,7 @@ export default function App() {
       </StaticPage>
     );
   } else if (path === '/blog') {
-    content = (
-      <StaticPage title="Blog">
-        <p><strong>Improving OCR for scanned invoices</strong>: fallback parsing now handles image-only PDFs.</p>
-        <p><strong>Schema reliability updates</strong>: quantity/amount/line_total reconciliation reduces null fields.</p>
-        <p><strong>What is next</strong>: configurable extraction templates and supplier-specific profiles.</p>
-      </StaticPage>
-    );
+    content = <BlogMappingMess onCta={() => navigate('/signup')} />;
   } else {
     content = <MarketingHomePage onPrimaryCta={() => navigate('/signup')} />;
   }
