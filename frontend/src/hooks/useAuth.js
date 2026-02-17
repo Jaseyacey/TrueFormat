@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { supabase, supabaseConfigured } from '../supabaseClient.js';
+import { resolveApiBase } from '../utils/apiBase.js';
 
-const API_BASE = (import.meta.env.VITE_API_BASE
-  || (import.meta.env.PROD ? 'https://trueformat.onrender.com' : 'http://127.0.0.1:8000')
-).replace(/\/+$/, '');
+const API_BASE = resolveApiBase();
 
 async function getApiError(res, fallback) {
   try {

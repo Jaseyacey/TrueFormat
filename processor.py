@@ -416,13 +416,17 @@ def _parse_date_str(date_str: str) -> str | None:
     import re
     from datetime import datetime
     date_str = re.sub(r'\s+', ' ', date_str.strip())
-    for fmt in ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%d.%m.%Y', '%d/%m/%y', '%d-%m-%y', '%d %b %Y', '%d %B %Y']:
+    for fmt in [
+        '%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%d.%m.%Y',
+        '%d/%m/%y', '%d-%m-%y', '%d.%m.%y',
+        '%d %b %Y', '%d %B %Y', '%d %b %y', '%d %B %y',
+    ]:
         try:
             dt = datetime.strptime(date_str, fmt)
             return dt.strftime('%Y-%m-%d')
         except ValueError:
             continue
-    return date_str if date_str else None
+    return None
 
 
 def extract_invoice_date_from_pdf(contents: bytes, max_pages: int | None = None) -> str | None:
@@ -445,7 +449,7 @@ def extract_invoice_date_from_pdf(contents: bytes, max_pages: int | None = None)
                     r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}',  # DD/MM/YYYY or DD-MM-YYYY
                     r'\d{4}[/-]\d{1,2}[/-]\d{1,2}',    # YYYY-MM-DD or YYYY/MM/DD
                     r'\d{1,2}\.\d{1,2}\.\d{2,4}',     # DD.MM.YYYY
-                    r'\d{1,2}\s+[A-Za-z]{3,9}\s+\d{2,4}',  # "10 Feb 2026" or "10 February 2026"
+                    r'\d{1,2}\s+(?:Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)\s+\d{2,4}',  # "10 Feb 2026" or "10 February 2026"
                 ]
                 for i, line in enumerate(lines):
                     line_lower = line.lower().strip()
@@ -758,6 +762,112 @@ def extract_pdf_tables_via_ocr(contents: bytes, max_pages: int | None = None) ->
     return df
 
 
+def extract_pdf_line_items_from_text(contents: bytes, max_pages: int | None = None) -> pd.DataFrame:
+    """
+    Fallback parser for text-based invoices that do not expose tabular structure.
+    It scans lines under a PARTCULARS/QTY/RATE/AMOUNT header and extracts
+    Description, Qty, Rate, and Amount using regex patterns.
+    """
+    customer_name = extract_customer_name_from_pdf(contents, max_pages=max_pages)
+    invoice_date = extract_invoice_date_from_pdf(contents, max_pages=max_pages)
+
+    line_items: list[dict[str, str]] = []
+    in_line_items_section = False
+    header_hits = 0
+
+    qty_rate_amount_re = re.compile(
+        r"(\d+(?:\.\d+)?)\s*\+\s*\d+(?:\.\d+)?\s+\d+(?:\.\d+)?\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)"
+    )
+    footer_markers = (
+        "challan no",
+        "gross amount",
+        "no of items",
+        "net amt",
+        "all subject to",
+        "for new",
+        "[rupees",
+        "add cgst",
+        "add sgst",
+        "continued from",
+        "less discount",
+        "round off",
+    )
+    summary_markers = ("total b/f", "total bf", "total b / f", "subtotal", "grand total")
+
+    try:
+        with pdfplumber.open(io.BytesIO(contents)) as pdf:
+            for page_idx, page in enumerate(pdf.pages):
+                if max_pages is not None and page_idx >= max_pages:
+                    break
+
+                text = page.extract_text() or ""
+                if not text.strip():
+                    continue
+
+                for raw_line in text.split("\n"):
+                    line = re.sub(r"\s+", " ", raw_line).strip()
+                    if not line:
+                        continue
+                    lower = line.lower()
+
+                    if "particulars" in lower and "qty" in lower and "rate" in lower and "amount" in lower:
+                        in_line_items_section = True
+                        header_hits += 1
+                        continue
+
+                    if not in_line_items_section:
+                        continue
+
+                    if any(marker in lower for marker in footer_markers):
+                        in_line_items_section = False
+                        continue
+                    if any(marker in lower for marker in summary_markers):
+                        continue
+
+                    match = qty_rate_amount_re.search(line)
+                    if not match:
+                        continue
+
+                    qty, rate, amount = match.groups()
+                    left_segment = line[:match.start()].strip(" -:;,.")
+                    if not left_segment:
+                        continue
+
+                    # Prefer product description before HSN code when present.
+                    hsn_match = re.search(r"\b\d{6,8}\b", left_segment)
+                    if hsn_match and hsn_match.start() > 2:
+                        description = left_segment[:hsn_match.start()].strip(" -:;,.#")
+                    else:
+                        description = left_segment
+
+                    description = re.sub(r"\s+", " ", description).strip()
+                    if not description or description.lower() in {"continued", "particulars"}:
+                        continue
+
+                    line_items.append(
+                        {
+                            "Description": description,
+                            "Qty": qty,
+                            "Rate": rate,
+                            "Amount": amount,
+                        }
+                    )
+    except Exception:
+        return pd.DataFrame()
+
+    if not line_items:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(line_items)
+    df = df.map(lambda v: '' if isinstance(v, str) and v.strip().lower() in ('nan', 'none', 'null', '') else (v.strip() if isinstance(v, str) else v))
+
+    if customer_name:
+        df['_extracted_customer_name'] = customer_name
+    if invoice_date:
+        df['_extracted_invoice_date'] = invoice_date
+    return df
+
+
 def extract_pdf_tables(
     contents: bytes,
     max_pages: int | None = None,
@@ -771,7 +881,69 @@ def extract_pdf_tables(
     all_tables = []
     customer_name = None
     invoice_date = None
-    
+    saw_text_layer = False
+
+    line_item_keywords = {
+        "description", "item", "item name", "product", "service",
+        "qty", "quantity", "unit price", "price", "rate", "amount", "line total", "total",
+        "sn", "sno", "sr no", "hsn", "batch",
+    }
+    metadata_keywords = {
+        "invoice no", "invoice number", "invoice date", "subtotal", "tax", "amount due", "due date"
+    }
+
+    def _split_lines(cell: object) -> list[str]:
+        if cell is None:
+            return [""]
+        text = str(cell).replace("\r", "\n")
+        parts = [part.strip() for part in text.split("\n")]
+        return parts if parts else [""]
+
+    def _header_score(row: list[object]) -> int:
+        joined = " ".join(str(c or "").strip().lower() for c in row)
+        if not joined:
+            return 0
+        return sum(1 for kw in line_item_keywords if kw in joined)
+
+    def _normalize_header(raw: object, idx: int) -> str:
+        val = str(raw or "").strip()
+        if not val:
+            return f"col_{idx+1}"
+        lower = val.lower()
+        if lower in {"sn.", "sn", "sr", "sno", "s.no"}:
+            return "Sn"
+        if "item" in lower and "name" in lower:
+            return "Item Name"
+        if "qty" in lower or "quantity" in lower:
+            return "Qty"
+        if "line" in lower and "total" in lower:
+            return "Line total"
+        if "unit" in lower and "price" in lower:
+            return "Unit price"
+        if lower == "rate":
+            return "Rate"
+        if lower == "amount":
+            return "Amount"
+        return val
+
+    def _expand_multiline_rows(df_page: pd.DataFrame) -> pd.DataFrame:
+        expanded_rows: list[dict] = []
+        for _, row in df_page.iterrows():
+            cells = {col: _split_lines(row.get(col, "")) for col in df_page.columns}
+            max_lines = max(len(lines) for lines in cells.values()) if cells else 1
+            multiline_cols = sum(1 for lines in cells.values() if len(lines) > 1)
+            if max_lines <= 1 or multiline_cols <= 1:
+                expanded_rows.append({col: str(row.get(col, "") or "").strip() for col in df_page.columns})
+                continue
+            for i in range(max_lines):
+                expanded_rows.append(
+                    {
+                        col: (cells[col][i] if i < len(cells[col]) else "").strip()
+                        for col in df_page.columns
+                    }
+                )
+        return pd.DataFrame(expanded_rows, columns=df_page.columns) if expanded_rows else df_page
+
     try:
         with pdfplumber.open(io.BytesIO(contents)) as pdf:
             # First pass: Extract metadata from text (customer name and invoice date)
@@ -782,45 +954,75 @@ def extract_pdf_tables(
             for page_idx, page in enumerate(pdf.pages):
                 if max_pages is not None and page_idx >= max_pages:
                     break
-                tables = page.extract_tables()
+                page_text = (page.extract_text() or "").strip()
+                if page_text:
+                    saw_text_layer = True
+
+                # Try multiple table strategies; many invoices are text-based
+                # and do not have explicit ruling lines.
+                tables = []
+                for settings in (
+                    None,
+                    {
+                        "vertical_strategy": "text",
+                        "horizontal_strategy": "text",
+                        "snap_tolerance": 3,
+                        "join_tolerance": 3,
+                    },
+                ):
+                    try:
+                        extracted = page.extract_tables(table_settings=settings) if settings else page.extract_tables()
+                    except Exception:
+                        extracted = []
+                    if extracted:
+                        tables.extend(extracted)
+
                 if not tables:
                     continue
                 
                 for table in tables:
                     if not table or len(table) < 2:
                         continue
-                    
-                    # Create temporary DF to inspect headers
-                    headers = [str(h).strip().lower() for h in table[0] if h]
-                    
-                    # TARGETED EXTRACTION: Only keep the table that looks like "Line Items"
-                    # Keywords that indicate a line items table (not totals/metadata)
-                    line_item_keywords = {
-                        'description', 'qty', 'quantity', 'unit price', 'unit price', 
-                        'line total', 'item', 'product', 'service'
-                    }
-                    
-                    # Exclude metadata tables (totals, invoice details, etc.)
-                    metadata_keywords = {
-                        'invoice no', 'invoice number', 'invoice date', 'total', 
-                        'subtotal', 'tax', 'amount due', 'due date'
-                    }
-                    
-                    # Check if this looks like a line items table
-                    has_line_item_keywords = any(keyword in ' '.join(headers) for keyword in line_item_keywords)
-                    has_only_metadata = all(keyword in ' '.join(headers) for keyword in metadata_keywords) if metadata_keywords else False
-                    
-                    if has_line_item_keywords and not has_only_metadata:
-                        # Create DataFrame and handle None/empty cells properly
-                        df_page = pd.DataFrame(table[1:], columns=table[0])
-                        # Replace None with empty string before string conversion
-                        df_page = df_page.fillna('')
-                        all_tables.append(df_page)
+
+                    header_row_idx = max(
+                        range(min(12, len(table))),
+                        key=lambda idx: _header_score(table[idx] or []),
+                    )
+                    score = _header_score(table[header_row_idx] or [])
+                    if score < 2:
+                        continue
+
+                    header_joined = " ".join(str(c or "").strip().lower() for c in table[header_row_idx])
+                    if any(meta in header_joined for meta in metadata_keywords) and not any(
+                        item in header_joined for item in ("item", "qty", "quantity", "amount", "rate")
+                    ):
+                        continue
+
+                    header_row = table[header_row_idx]
+                    normalized_headers = [_normalize_header(cell, i) for i, cell in enumerate(header_row)]
+                    data_rows = table[header_row_idx + 1:]
+                    if not data_rows:
+                        continue
+
+                    df_page = pd.DataFrame(data_rows, columns=normalized_headers).fillna("")
+                    df_page = _expand_multiline_rows(df_page)
+                    if df_page.empty:
+                        continue
+                    all_tables.append(df_page)
 
     except Exception as e:
         raise ValueError(f"Could not read PDF file. {e}")
 
     if not all_tables:
+        if saw_text_layer:
+            text_fallback_df = extract_pdf_line_items_from_text(contents, max_pages=max_pages)
+            if not text_fallback_df.empty:
+                return text_fallback_df
+            raise ValueError(
+                "This PDF has text, but no line-item table could be detected. "
+                "Please upload a version with clear line-item columns "
+                "(e.g., Description, Qty, Unit Price, Line Total)."
+            )
         if enable_ocr_fallback and ALLOW_SCANNED_PDFS:
             # Fallback for scanned/image-only PDFs.
             return extract_pdf_tables_via_ocr(contents, max_pages=max_pages)
@@ -858,6 +1060,16 @@ def extract_pdf_tables(
         return col_name.strip()
     
     df.columns = [normalize_column_name(col) for col in df.columns]
+
+    # Drop carry-forward/summary rows that are not true line items.
+    summary_terms = ("total b/f", "subtotal", "grand total", "class total", "amount due", "deal:")
+    lower_df = df.astype(str).apply(lambda s: s.str.lower())
+    summary_mask = lower_df.apply(
+        lambda row: any(any(term in cell for term in summary_terms) for cell in row),
+        axis=1,
+    )
+    if summary_mask.any():
+        df = df.loc[~summary_mask].copy()
 
     def _is_blank(v) -> bool:
         if v is None:
@@ -965,12 +1177,16 @@ def apply_transformation(file: UploadFile, mapping: dict) -> pd.DataFrame:
         line_total_src = valid_mapping.get("line_total")
         if amount_src and line_total_src and amount_src == line_total_src:
             better_total = _find_col_by_keywords(("line", "total")) or _find_col_by_keywords(("total",), ("sub", "due", "tax"))
+            if not better_total:
+                better_total = _find_col_by_keywords(("amount",), ("tax", "gst", "due", "payable"))
             if better_total and better_total != amount_src:
                 valid_mapping["line_total"] = better_total
 
         # If line_total is missing entirely, pick a best-effort total column.
         if "line_total" not in valid_mapping:
             better_total = _find_col_by_keywords(("line", "total")) or _find_col_by_keywords(("total",), ("sub", "due", "tax"))
+            if not better_total:
+                better_total = _find_col_by_keywords(("amount",), ("tax", "gst", "due", "payable"))
             if better_total:
                 valid_mapping["line_total"] = better_total
 
@@ -1032,6 +1248,18 @@ def apply_transformation(file: UploadFile, mapping: dict) -> pd.DataFrame:
     if {"quantity", "amount", "line_total"}.issubset(final_df.columns):
         mask = (
             final_df["quantity"].isna()
+            & final_df["line_total"].notna()
+            & final_df["amount"].notna()
+            & (final_df["amount"] != 0)
+        )
+        final_df.loc[mask, "quantity"] = final_df.loc[mask, "line_total"] / final_df.loc[mask, "amount"]
+        final_df["quantity"] = final_df["quantity"].round(6)
+    # Some invoice parsers emit zero quantity when the first digit is dropped.
+    # Recover qty from line_total/amount when both monetary fields are present.
+    if {"quantity", "amount", "line_total"}.issubset(final_df.columns):
+        mask = (
+            final_df["quantity"].notna()
+            & (final_df["quantity"] <= 0)
             & final_df["line_total"].notna()
             & final_df["amount"].notna()
             & (final_df["amount"] != 0)
@@ -1270,12 +1498,16 @@ async def upload_file(file: UploadFile = File(...), current_user: str = Depends(
                         if source.startswith('_extracted_'):
                             continue
                         sl = source.lower()
-                        if 'line total' in sl or ('total' in sl and 'sub' not in sl):
+                        if (
+                            'line total' in sl
+                            or ('total' in sl and 'sub' not in sl)
+                            or sl.strip() in ('amount', 'net amount', 'value')
+                        ):
                             mapping[target] = source
                             break
             elif target == 'amount':
-                # Prefer unit price for amount; otherwise amount-like columns.
-                amount_col = next((s for s in source_columns if s.strip().lower() in ('unit price', 'amount', 'price')), None)
+                # Prefer per-unit price fields; avoid mapping to line-total "Amount" by default.
+                amount_col = next((s for s in source_columns if s.strip().lower() in ('unit price', 'rate', 'price', 'unit rate')), None)
                 if amount_col:
                     mapping[target] = amount_col
                 else:
@@ -1283,7 +1515,11 @@ async def upload_file(file: UploadFile = File(...), current_user: str = Depends(
                         if source.startswith('_extracted_'):
                             continue
                         sl = source.lower()
-                        if 'unit price' in sl or 'amount' in sl or (sl == 'price'):
+                        if (
+                            'unit price' in sl
+                            or sl.strip() in ('rate', 'price', 'unit rate')
+                            or ('rate' in sl and 'gst' not in sl)
+                        ):
                             mapping[target] = source
                             break
             else:

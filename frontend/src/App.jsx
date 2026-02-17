@@ -100,7 +100,7 @@ export default function App() {
   }
 
   return (
-    <div className="mx-auto w-[min(1180px,94vw)] py-6">
+    <div className="mx-auto w-[min(1180px,94vw)] py-6 tf-page">
       <TopNav authed={Boolean(auth.token)} onLogout={handleLogout} />
       {content}
     </div>

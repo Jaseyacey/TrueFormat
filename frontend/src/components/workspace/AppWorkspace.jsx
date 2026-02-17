@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react';
 import ColumnMapper from '../../ColumnMapper.jsx';
 import { supabase } from '../../supabaseClient.js';
+import { resolveApiBase } from '../../utils/apiBase.js';
 
-const API_BASE = (import.meta.env.VITE_API_BASE
-  || (import.meta.env.PROD ? 'https://trueformat.onrender.com' : 'http://127.0.0.1:8000')
-).replace(/\/+$/, '');
+const API_BASE = resolveApiBase();
 
 const TARGET_SCHEMA = ['transaction_id', 'date', 'description', 'quantity', 'amount', 'line_total', 'customer_name'];
 
@@ -20,19 +19,12 @@ async function getApiError(res, fallback) {
 function NullPills({ nullCount }) {
   const items = Object.entries(nullCount);
   return (
-    <div className="mt-3 flex flex-wrap gap-2">
+    <div className="tf-null-pills">
       {items.map(([col, count]) => {
         const clean = Number(count) === 0;
         return (
-          <span
-            key={col}
-            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
-              clean
-                ? 'border-[#38BDF8]/40 bg-[#38BDF8]/16 text-[#38BDF8]'
-                : 'border-amber-200/30 bg-amber-400/10 text-amber-200'
-            }`}
-          >
-            <span className="font-mono">{col}</span>
+          <span key={col} className={`tf-null-pill ${clean ? 'is-clean' : 'is-dirty'}`}>
+            <span className="tf-null-pill-label">{col}</span>
             <span>{count}</span>
           </span>
         );
@@ -180,18 +172,18 @@ export default function AppWorkspace({ token, onUnauthorized }) {
   };
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-[#27272A]/55 p-6 backdrop-blur-md">
-      <div className="mb-4 flex items-center gap-3">
-        <img src="/trueformat-logo.svg" alt="TrueFormat logo" className="h-11 w-11 rounded-full bg-white/5 p-1" />
-        <h1 className="text-2xl font-black text-[#F8FAFC] sm:text-3xl">TrueFormat Secure Data Extraction</h1>
+    <section className="rounded-2xl border border-white/10 bg-[#27272A]/55 p-6 backdrop-blur-md tf-card">
+      <div className="mb-4 flex items-center gap-3 tf-card-head">
+        <img src="/trueformat-logo.svg" alt="TrueFormat logo" className="h-11 w-11 rounded-full bg-white/5 p-1 tf-logo tf-logo-md" />
+        <h1 className="text-2xl font-black text-[#F8FAFC] sm:text-3xl tf-card-title">TrueFormat Secure Data Extraction</h1>
       </div>
 
-      <div className="mb-2 flex flex-wrap items-center gap-3">
+      <div className="mb-2 flex flex-wrap items-center gap-3 tf-upload-row">
         <div
           className={`relative min-w-[260px] rounded-xl border p-4 transition ${
             isDraggingPdf
-              ? 'border-[#38BDF8]/60 bg-[#059669]/26 shadow-[0_0_0_1px_rgba(56,189,248,0.2),0_0_26px_rgba(56,189,248,0.14)]'
-              : 'border-white/10 bg-[#059669]/14'
+              ? 'border-[#38BDF8]/60 bg-[#059669]/26 shadow-[0_0_0_1px_rgba(56,189,248,0.2),0_0_26px_rgba(56,189,248,0.14)] tf-dropzone is-dragging'
+              : 'border-white/10 bg-[#059669]/14 tf-dropzone'
           }`}
           onDragOver={(e) => {
             e.preventDefault();
@@ -217,7 +209,7 @@ export default function AppWorkspace({ token, onUnauthorized }) {
         </div>
 
         <input
-          className="max-w-full rounded-lg border border-white/15 bg-[#27272A]/65 px-3 py-2 text-sm text-[#F8FAFC]"
+          className="max-w-full rounded-lg border border-white/15 bg-[#27272A]/65 px-3 py-2 text-sm text-[#F8FAFC] tf-file-input"
           type="file"
           accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/pdf"
           onChange={(e) => handleFilePick(e.target.files?.[0] || null)}
@@ -225,16 +217,16 @@ export default function AppWorkspace({ token, onUnauthorized }) {
 
         <button
           type="button"
-          className="rounded-lg bg-[#38BDF8] px-4 py-2 text-sm font-semibold text-[#020617] transition hover:bg-[#475569]"
+          className="rounded-lg bg-[#38BDF8] px-4 py-2 text-sm font-semibold text-[#020617] transition hover:bg-[#475569] tf-btn tf-btn-primary"
           onClick={handleUpload}
         >
           Upload & Auto-map
         </button>
       </div>
 
-      {file && <p className="text-sm text-[#94A3B8]">Selected file: {file.name}</p>}
-      {status && <p className="mt-2 text-sm font-semibold text-[#94A3B8]">{status}</p>}
-      {error && <p className="mt-2 text-sm font-semibold text-[#EF4444]">{error}</p>}
+      {file && <p className="text-sm text-[#94A3B8] tf-muted">Selected file: {file.name}</p>}
+      {status && <p className="mt-2 text-sm font-semibold text-[#94A3B8] tf-status">{status}</p>}
+      {error && <p className="mt-2 text-sm font-semibold text-[#EF4444] tf-error">{error}</p>}
 
       {sourceColumns.length > 0 && (
         <ColumnMapper
@@ -246,15 +238,15 @@ export default function AppWorkspace({ token, onUnauthorized }) {
       )}
 
       {preview.length > 0 && (
-        <section className="mt-7">
-          <h2 className="mb-3 text-xl font-semibold text-[#F8FAFC]">Preview ({rowCount || preview.length} rows)</h2>
+        <section className="tf-preview">
+          <h2 className="tf-preview-title">Preview ({rowCount || preview.length} rows)</h2>
 
-          <div className="overflow-x-auto rounded-xl border border-white/10">
-            <table className="w-full border-collapse text-left text-sm">
+          <div className="tf-table-wrap">
+            <table className="tf-table">
               <thead>
-                <tr className="bg-[#059669]/24 text-[#38BDF8]">
+                <tr className="tf-table-head-row">
                   {Object.keys(preview[0]).map((col) => (
-                    <th key={col} className="px-3 py-3 font-semibold">
+                    <th key={col} className="tf-table-head-cell">
                       {col}
                     </th>
                   ))}
@@ -262,18 +254,13 @@ export default function AppWorkspace({ token, onUnauthorized }) {
               </thead>
               <tbody>
                 {preview.map((row, idx) => (
-                  <tr key={idx} className="odd:bg-[#059669]/10 even:bg-[#020617]/20 hover:bg-[#059669]/18">
+                  <tr key={idx} className={`tf-table-row ${idx % 2 === 0 ? 'is-odd' : 'is-even'}`}>
                     {Object.keys(row).map((col) => {
                       const raw = row[col] === null ? '' : String(row[col]);
                       const txCell = col === 'transaction_id';
                       return (
-                        <td
-                          key={col}
-                          className={`border-t border-white/10 px-3 py-2 font-mono text-xs ${
-                            txCell ? 'text-[#38BDF8]' : 'text-[#38BDF8]'
-                          }`}
-                        >
-                          {txCell ? <span className="rounded bg-[#059669]/25 px-1.5 py-0.5">{raw}</span> : raw}
+                        <td key={col} className="tf-table-cell">
+                          {txCell ? <span className="tf-tx-chip">{raw}</span> : raw}
                         </td>
                       );
                     })}
@@ -283,12 +270,12 @@ export default function AppWorkspace({ token, onUnauthorized }) {
             </table>
           </div>
 
-          <h3 className="mt-4 text-lg font-semibold text-[#F8FAFC]">Null counts</h3>
+          <h3 className="tf-null-title">Null counts</h3>
           <NullPills nullCount={nullCount} />
 
           <button
             type="button"
-            className="mt-5 rounded-lg bg-[#38BDF8] px-4 py-2 text-sm font-semibold text-[#020617] transition hover:bg-[#475569]"
+            className="mt-5 rounded-lg bg-[#38BDF8] px-4 py-2 text-sm font-semibold text-[#020617] transition hover:bg-[#475569] tf-btn tf-btn-primary"
             onClick={handleDownload}
           >
             Download CSV
