@@ -45,6 +45,9 @@ export default function AppWorkspace({ token, onUnauthorized }) {
   const [finalMapping, setFinalMapping] = useState(null);
   const [rowCount, setRowCount] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [editableRows, setEditableRows] = useState([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [hasEdits, setHasEdits] = useState(false);
 
   const authHeader = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
@@ -127,10 +130,14 @@ export default function AppWorkspace({ token, onUnauthorized }) {
       }
       const data = await res.json();
       if (!res.ok || data.status !== 'success') throw new Error(data.message || `Transform failed (${res.status})`);
-      setPreview(data.preview || []);
+      const rows = data.preview || [];
+      setPreview(rows);
+      setEditableRows(rows.map((row) => ({ ...row })));
       setNullCount(data.null_count || {});
       setRowCount(data.row_count || 0);
       setFinalMapping(finalMap);
+      setIsEditing(false);
+      setHasEdits(false);
       setStatus('Transform complete. Review the preview below.');
     } catch (e) {
       setError(e.message || 'Failed to transform data.');
@@ -138,12 +145,51 @@ export default function AppWorkspace({ token, onUnauthorized }) {
     }
   };
 
-  const handleDownload = async () => {
+  const exportRowsToCsv = (rows) => {
+    if (!rows.length) return '';
+    const columns = Object.keys(rows[0]);
+    const csvCell = (value) => {
+      if (value === null || value === undefined) return '';
+      const text = String(value);
+      if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+      return text;
+    };
+    const header = columns.map(csvCell).join(',');
+    const body = rows.map((row) => columns.map((col) => csvCell(row[col])).join(',')).join('\n');
+    return `${header}\n${body}`;
+  };
+
+  const handleDownloadEditedCsv = () => {
+    const rows = editableRows.length ? editableRows : preview;
+    if (!rows.length) {
+      setError('No data to export.');
+      return;
+    }
+    try {
+      const csvText = exportRowsToCsv(rows);
+      const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = hasEdits ? 'trueformat-export-edited.csv' : 'trueformat-export.csv';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setStatus(hasEdits ? 'Edited CSV exported successfully.' : 'CSV exported successfully.');
+      setError('');
+    } catch (e) {
+      setError(e.message || 'Failed to export CSV.');
+      setStatus('');
+    }
+  };
+
+  const handleDownloadOriginalCsv = async () => {
     if (!file || !finalMapping) {
       setError('No data to export.');
       return;
     }
-    setStatus('Exporting CSV...');
+    setStatus('Exporting original CSV...');
 
     const formData = new FormData();
     formData.append('file', file);
@@ -164,11 +210,32 @@ export default function AppWorkspace({ token, onUnauthorized }) {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      setStatus('CSV exported successfully.');
+      setStatus('Original CSV exported successfully.');
     } catch (e) {
       setError(e.message || 'Failed to export CSV.');
       setStatus('');
     }
+  };
+
+  const handleCellChange = (rowIdx, col, value) => {
+    setEditableRows((prev) => {
+      const next = [...prev];
+      next[rowIdx] = { ...next[rowIdx], [col]: value };
+      return next;
+    });
+    setHasEdits(true);
+  };
+
+  const handleDeleteRow = (rowIdx) => {
+    setEditableRows((prev) => prev.filter((_, idx) => idx !== rowIdx));
+    setHasEdits(true);
+  };
+
+  const handleResetEdits = () => {
+    setEditableRows(preview.map((row) => ({ ...row })));
+    setHasEdits(false);
+    setIsEditing(false);
+    setStatus('Edits were reset to transformed output.');
   };
 
   return (
@@ -240,30 +307,70 @@ export default function AppWorkspace({ token, onUnauthorized }) {
       {preview.length > 0 && (
         <section className="tf-preview">
           <h2 className="tf-preview-title">Preview ({rowCount || preview.length} rows)</h2>
+          <div className="mb-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-[#CBD5E1] transition hover:border-[#38BDF8] hover:text-[#F8FAFC]"
+              onClick={() => setIsEditing((prev) => !prev)}
+            >
+              {isEditing ? 'Done editing' : 'Edit table'}
+            </button>
+            {hasEdits && (
+              <button
+                type="button"
+                className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-[#CBD5E1] transition hover:border-[#38BDF8] hover:text-[#F8FAFC]"
+                onClick={handleResetEdits}
+              >
+                Reset edits
+              </button>
+            )}
+          </div>
 
           <div className="tf-table-wrap">
             <table className="tf-table">
               <thead>
                 <tr className="tf-table-head-row">
-                  {Object.keys(preview[0]).map((col) => (
+                  {Object.keys((editableRows[0] || preview[0])).map((col) => (
                     <th key={col} className="tf-table-head-cell">
                       {col}
                     </th>
                   ))}
+                  {isEditing && <th className="tf-table-head-cell">actions</th>}
                 </tr>
               </thead>
               <tbody>
-                {preview.map((row, idx) => (
+                {(editableRows.length ? editableRows : preview).map((row, idx) => (
                   <tr key={idx} className={`tf-table-row ${idx % 2 === 0 ? 'is-odd' : 'is-even'}`}>
                     {Object.keys(row).map((col) => {
                       const raw = row[col] === null ? '' : String(row[col]);
                       const txCell = col === 'transaction_id';
                       return (
                         <td key={col} className="tf-table-cell">
-                          {txCell ? <span className="tf-tx-chip">{raw}</span> : raw}
+                          {isEditing ? (
+                            <input
+                              className="w-full rounded border border-white/10 bg-[#0B1220] px-2 py-1 text-xs text-[#F8FAFC] outline-none focus:border-[#38BDF8]"
+                              value={raw}
+                              onChange={(e) => handleCellChange(idx, col, e.target.value)}
+                            />
+                          ) : txCell ? (
+                            <span className="tf-tx-chip">{raw}</span>
+                          ) : (
+                            raw
+                          )}
                         </td>
                       );
                     })}
+                    {isEditing && (
+                      <td className="tf-table-cell">
+                        <button
+                          type="button"
+                          className="rounded border border-[#EF4444]/40 px-2 py-1 text-xs font-semibold text-[#FCA5A5] transition hover:bg-[#EF4444]/15"
+                          onClick={() => handleDeleteRow(idx)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -273,13 +380,22 @@ export default function AppWorkspace({ token, onUnauthorized }) {
           <h3 className="tf-null-title">Null counts</h3>
           <NullPills nullCount={nullCount} />
 
-          <button
-            type="button"
-            className="mt-5 rounded-lg bg-[#38BDF8] px-4 py-2 text-sm font-semibold text-[#020617] transition hover:bg-[#475569] tf-btn tf-btn-primary"
-            onClick={handleDownload}
-          >
-            Download CSV
-          </button>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              type="button"
+              className="rounded-lg bg-[#38BDF8] px-4 py-2 text-sm font-semibold text-[#020617] transition hover:bg-[#475569] tf-btn tf-btn-primary"
+              onClick={handleDownloadEditedCsv}
+            >
+              Download {hasEdits ? 'Edited CSV' : 'CSV'}
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold text-[#CBD5E1] transition hover:border-[#38BDF8] hover:text-[#F8FAFC]"
+              onClick={handleDownloadOriginalCsv}
+            >
+              Download Original CSV
+            </button>
+          </div>
         </section>
       )}
     </section>
