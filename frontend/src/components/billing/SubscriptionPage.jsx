@@ -54,7 +54,6 @@ export default function SubscriptionPage({ defaultEmail = '' }) {
         if (!active) return;
         if (data?.payment_processed) {
           setStatus('Payment completed. You can now log in.');
-          if (data?.email) setEmail(data.email);
           return;
         }
         setStatus('Payment is still processing. Refresh this page in a few seconds.');

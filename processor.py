@@ -351,6 +351,7 @@ def _supabase_rest_request(
     path: str,
     method: str = "GET",
     body: dict | list | None = None,
+    extra_headers: dict | None = None,
 ) -> object:
     if not SUPABASE_URL:
         raise HTTPException(status_code=500, detail="SUPABASE_URL is not configured on backend.")
@@ -366,6 +367,8 @@ def _supabase_rest_request(
     if body is not None:
         payload = json.dumps(body).encode("utf-8")
         headers["Content-Type"] = "application/json"
+    if extra_headers:
+        headers.update(extra_headers)
 
     req = Request(
         f"{SUPABASE_URL}/rest/v1/{path.lstrip('/')}",
@@ -408,21 +411,22 @@ def _get_user_profile(email: str) -> dict | None:
 
 
 def _ensure_user_profile(email: str, payment_processed: bool) -> None:
-    profile = _get_user_profile(email)
-    if profile is None:
+    # Idempotent insert path: avoid GET-then-POST races under concurrent requests.
+    if not payment_processed:
         _supabase_rest_request(
-            "user_profile",
+            "user_profile?on_conflict=email",
             method="POST",
-            body=[{"email": email, "payment_processed": payment_processed}],
+            body=[{"email": email, "payment_processed": False}],
+            extra_headers={"Prefer": "resolution=ignore-duplicates,return=minimal"},
         )
         return
-    if bool(profile.get("payment_processed")) != payment_processed:
-        query = urllib.parse.quote(email, safe="")
-        _supabase_rest_request(
-            f"user_profile?email=eq.{query}",
-            method="PATCH",
-            body={"payment_processed": payment_processed},
-        )
+
+    _supabase_rest_request(
+        "user_profile?on_conflict=email",
+        method="POST",
+        body=[{"email": email, "payment_processed": True}],
+        extra_headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+    )
 
 
 def _set_payment_processed(email: str, payment_processed: bool) -> None:
@@ -1595,8 +1599,11 @@ async def billing_create_checkout_session(payload: BillingCheckoutRequest):
     if billing_cycle not in {"monthly", "annual"}:
         raise HTTPException(status_code=422, detail="billing_cycle must be monthly or annual.")
 
-    if _get_user_profile(email) is None:
-        _ensure_user_profile(email, payment_processed=False)
+    profile = _get_user_profile(email)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="No profile found for this email. Complete signup first.")
+    if bool(profile.get("payment_processed")):
+        raise HTTPException(status_code=409, detail="Payment already processed for this account.")
 
     success_url = f"{FRONTEND_BASE_URL}/subscription?success=1&session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{FRONTEND_BASE_URL}/subscription?canceled=1"
@@ -1630,18 +1637,10 @@ async def billing_checkout_session(session_id: str):
         raise HTTPException(status_code=502, detail=f"Failed to fetch Stripe session: {str(e)[:220]}")
 
     paid = session.payment_status == "paid" and session.status == "complete"
-    metadata = session.metadata or {}
-    raw_email = (session.customer_details or {}).get("email") or metadata.get("email")
-    email = ""
-    if raw_email:
-        email = _normalize_email(raw_email)
-        if paid:
-            _set_payment_processed(email, True)
 
     return {
         "status": "ok",
         "payment_processed": paid,
-        "email": email,
     }
 
 
