@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase, supabaseConfigured } from '../supabaseClient.js';
 import { resolveApiBase } from '../utils/apiBase.js';
 
@@ -21,41 +21,84 @@ export function useAuth() {
   const [otpCode, setOtpCode] = useState('');
   const [signupOtpStep, setSignupOtpStep] = useState(false);
   const [pendingSignupPassword, setPendingSignupPassword] = useState('');
+  const [signupVerifiedPendingPayment, setSignupVerifiedPendingPayment] = useState(false);
   const [authStatus, setAuthStatus] = useState('');
+
+  const checkPaymentStatus = useCallback(async (accessToken) => {
+    const res = await fetch(`${API_BASE}/auth/payment-status`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) throw new Error(await getApiError(res, `Payment status check failed (${res.status})`));
+    const data = await res.json();
+    return Boolean(data?.payment_processed);
+  }, []);
+
+  const clearTransientAuthState = () => {
+    setToken('');
+    setPassword('');
+    setConfirmPassword('');
+    setOtpCode('');
+    setSignupOtpStep(false);
+    setPendingSignupPassword('');
+  };
 
   useEffect(() => {
     if (!supabaseConfigured || !supabase) return;
+
+    const syncSession = async (session) => {
+      const accessToken = session?.access_token || '';
+      if (!accessToken) {
+        setToken('');
+        return;
+      }
+      try {
+        const paymentProcessed = await checkPaymentStatus(accessToken);
+        if (!paymentProcessed) {
+          await supabase.auth.signOut();
+          setToken('');
+          setAuthStatus('Your subscription payment is pending. Complete payment to sign in.');
+          return;
+        }
+        setToken(accessToken);
+      } catch (e) {
+        setToken('');
+        setAuthStatus(e.message || 'Unable to validate payment status.');
+      }
+    };
+
     supabase.auth.getSession().then(({ data }) => {
-      setToken(data.session?.access_token || '');
+      syncSession(data.session);
     });
+
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setToken(session?.access_token || '');
+      syncSession(session);
     });
+
     return () => {
       data.subscription.unsubscribe();
     };
-  }, []);
+  }, [checkPaymentStatus]);
 
   const submitAuth = async (mode) => {
     if (!supabaseConfigured || !supabase) {
       setAuthStatus('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
-      return false;
+      return { ok: false };
     }
 
     if (mode === 'register' && !signupOtpStep) {
       if (password !== confirmPassword) {
         setAuthStatus('Password and confirm password must match.');
-        return false;
+        return { ok: false };
       }
       if (password.length < 8) {
         setAuthStatus('Password must be at least 8 characters.');
-        return false;
+        return { ok: false };
       }
     }
 
     if (mode === 'register' && signupOtpStep && !/^\d{6}$/.test(otpCode)) {
       setAuthStatus('Enter a valid 6-digit code.');
-      return false;
+      return { ok: false };
     }
 
     setAuthStatus('Processing...');
@@ -70,8 +113,9 @@ export function useAuth() {
         setPendingSignupPassword(password);
         setSignupOtpStep(true);
         setOtpCode('');
+        setSignupVerifiedPendingPayment(false);
         setAuthStatus('Signup started. Check your email for the 6-digit code.');
-        return false;
+        return { ok: false };
       }
 
       if (mode === 'register' && signupOtpStep) {
@@ -82,21 +126,14 @@ export function useAuth() {
         });
         if (!verifyRes.ok) throw new Error(await getApiError(verifyRes, `Verification failed (${verifyRes.status})`));
 
-        const signInResult = await supabase.auth.signInWithPassword({
-          email,
-          password: pendingSignupPassword,
-        });
-        if (signInResult.error) throw signInResult.error;
-        const accessToken = signInResult.data.session?.access_token || '';
-        if (!accessToken) throw new Error('Verification succeeded, but sign in did not return a session.');
-
-        setToken(accessToken);
         setSignupOtpStep(false);
         setPendingSignupPassword('');
+        setPassword('');
         setConfirmPassword('');
         setOtpCode('');
-        setAuthStatus('Authenticated.');
-        return true;
+        setSignupVerifiedPendingPayment(true);
+        setAuthStatus('Email verified. Continue to the subscription payment page.');
+        return { ok: false, requiresPayment: true };
       }
 
       const authResult = await supabase.auth.signInWithPassword({ email, password });
@@ -105,15 +142,24 @@ export function useAuth() {
       const accessToken = authResult.data.session?.access_token || '';
       if (!accessToken) {
         setAuthStatus('Authentication succeeded, but no session was returned.');
-        return false;
+        return { ok: false };
+      }
+
+      const paymentProcessed = await checkPaymentStatus(accessToken);
+      if (!paymentProcessed) {
+        await supabase.auth.signOut();
+        clearTransientAuthState();
+        setAuthStatus('Payment required. Complete your subscription before signing in.');
+        return { ok: false, requiresPayment: true };
       }
 
       setToken(accessToken);
+      setSignupVerifiedPendingPayment(false);
       setAuthStatus('Authenticated.');
-      return true;
+      return { ok: true };
     } catch (e) {
       setAuthStatus(e.message || 'Authentication failed.');
-      return false;
+      return { ok: false };
     }
   };
 
@@ -144,14 +190,10 @@ export function useAuth() {
     } catch {
       // Fall through: local session state is still cleared below.
     } finally {
-      setToken('');
+      clearTransientAuthState();
       setAuthStatus('');
       setEmail('');
-      setPassword('');
-      setConfirmPassword('');
-      setOtpCode('');
-      setSignupOtpStep(false);
-      setPendingSignupPassword('');
+      setSignupVerifiedPendingPayment(false);
     }
   };
 
@@ -166,6 +208,8 @@ export function useAuth() {
     otpCode,
     setOtpCode,
     signupOtpStep,
+    signupVerifiedPendingPayment,
+    setSignupVerifiedPendingPayment,
     authStatus,
     submitAuth,
     resendSignupOtp,

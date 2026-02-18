@@ -6,6 +6,7 @@ import TopNav from './components/layout/TopNav.jsx';
 import ConfigErrorPage from './components/auth/ConfigErrorPage.jsx';
 import AuthPage from './components/auth/AuthPage.jsx';
 import AppWorkspace from './components/workspace/AppWorkspace.jsx';
+import SubscriptionPage from './components/billing/SubscriptionPage.jsx';
 import StaticPage from './components/common/StaticPage.jsx';
 import { navigate } from './utils/navigation.js';
 import { useAuth } from './hooks/useAuth.js';
@@ -34,14 +35,16 @@ export default function App() {
 
   const handleLoginSubmit = async (event) => {
     event.preventDefault();
-    const isAuthed = await auth.submitAuth('login');
-    if (isAuthed) navigate('/app');
+    const result = await auth.submitAuth('login');
+    if (result.ok) navigate('/app');
+    if (result.requiresPayment) navigate('/subscription');
   };
 
   const handleSignupSubmit = async (event) => {
     event.preventDefault();
-    const isAuthed = await auth.submitAuth('register');
-    if (isAuthed) navigate('/app');
+    const result = await auth.submitAuth('register');
+    if (result.requiresPayment) navigate('/subscription');
+    if (result.ok) navigate('/app');
   };
 
   const handleLogout = async () => {
@@ -77,6 +80,8 @@ export default function App() {
         onSubmit={handleSignupSubmit}
       />
     );
+  } else if (path === '/subscription') {
+    content = <SubscriptionPage defaultEmail={auth.email} />;
   } else if (path === '/terms') {
     content = (
       <StaticPage title="Terms of Service">
