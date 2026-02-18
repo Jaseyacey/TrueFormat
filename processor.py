@@ -11,11 +11,13 @@ import base64
 import time
 import secrets
 import hashlib
+import urllib.parse
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 import pandas as pd
 import pdfplumber
-from fastapi import FastAPI, UploadFile, File, Form, Response, HTTPException, Depends
+import stripe
+from fastapi import FastAPI, UploadFile, File, Form, Response, HTTPException, Depends, Request as FastAPIRequest
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
@@ -71,6 +73,9 @@ SUPABASE_AUTH_AUD = os.getenv("SUPABASE_AUTH_AUD", "authenticated")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY_TEST", "") or os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173").rstrip("/")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "")
 OTP_HASH_SECRET = os.getenv("OTP_HASH_SECRET", SUPABASE_JWT_SECRET or "dev-otp-secret")
@@ -93,6 +98,7 @@ except ValueError:
     UPLOAD_PAGE_LIMIT = 2
 ALLOW_SCANNED_PDFS = os.getenv("ALLOW_SCANNED_PDFS", "false").lower() in {"1", "true", "yes"}
 auth_scheme = HTTPBearer(auto_error=False)
+stripe.api_key = STRIPE_SECRET_KEY
 
 
 class InterestRequest(BaseModel):
@@ -115,6 +121,11 @@ class SignupVerifyRequest(BaseModel):
     email: str
     password: str = Field(min_length=8, max_length=128)
     code: str = Field(min_length=6, max_length=6)
+
+
+class BillingCheckoutRequest(BaseModel):
+    email: str
+    billing_cycle: str = Field(pattern="^(monthly|annual)$")
 
 
 def _db_conn() -> sqlite3.Connection:
@@ -218,7 +229,7 @@ def _send_signup_otp_email(email: str, code: str) -> None:
         raise HTTPException(status_code=502, detail="Resend email request timed out.")
 
 
-def _create_supabase_user(email: str, password: str) -> str:
+def _create_supabase_user(email: str, password: str) -> tuple[str, str | None]:
     if not SUPABASE_URL:
         raise HTTPException(status_code=500, detail="SUPABASE_URL is not configured on backend.")
     if not SUPABASE_SERVICE_ROLE_KEY:
@@ -244,7 +255,9 @@ def _create_supabase_user(email: str, password: str) -> str:
         with urlopen(req, timeout=10) as resp:
             if resp.status < 200 or resp.status >= 300:
                 raise HTTPException(status_code=502, detail=f"Supabase user creation failed with status {resp.status}.")
-            return "created"
+            user_payload = json.loads(resp.read().decode("utf-8") or "{}")
+            user_id = user_payload.get("id") if isinstance(user_payload, dict) else None
+            return "created", user_id
     except HTTPError as e:
         try:
             body = e.read().decode("utf-8")
@@ -252,7 +265,7 @@ def _create_supabase_user(email: str, password: str) -> str:
             body = ""
         body_lower = body.lower()
         if e.code in (400, 409, 422) and ("already" in body_lower and "register" in body_lower):
-            return "exists"
+            return "exists", None
         raise HTTPException(status_code=502, detail=f"Supabase user creation failed ({e.code}). {body[:200]}".strip())
     except URLError as e:
         raise HTTPException(status_code=502, detail=f"Supabase user creation failed: {e.reason}")
@@ -334,9 +347,91 @@ def _validate_supabase_token_remote(token: str) -> tuple[dict | None, str | None
         return None, "Supabase auth request failed"
 
 
-def get_current_user(
+def _supabase_rest_request(
+    path: str,
+    method: str = "GET",
+    body: dict | list | None = None,
+) -> object:
+    if not SUPABASE_URL:
+        raise HTTPException(status_code=500, detail="SUPABASE_URL is not configured on backend.")
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        raise HTTPException(status_code=500, detail="SUPABASE_SERVICE_ROLE_KEY is not configured on backend.")
+
+    headers = {
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Accept": "application/json",
+    }
+    payload = None
+    if body is not None:
+        payload = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+
+    req = Request(
+        f"{SUPABASE_URL}/rest/v1/{path.lstrip('/')}",
+        data=payload,
+        headers=headers,
+        method=method.upper(),
+    )
+    try:
+        with urlopen(req, timeout=10) as resp:
+            raw = resp.read().decode("utf-8")
+            if not raw:
+                return None
+            return json.loads(raw)
+    except HTTPError as e:
+        body_text = ""
+        try:
+            body_text = e.read().decode("utf-8")
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=502,
+            detail=f"Supabase REST {method.upper()} /{path} failed ({e.code}). {body_text[:220]}".strip(),
+        )
+    except URLError as e:
+        raise HTTPException(status_code=502, detail=f"Supabase REST request failed: {e.reason}")
+    except TimeoutError:
+        raise HTTPException(status_code=502, detail="Supabase REST request timed out.")
+
+
+def _get_user_profile(email: str) -> dict | None:
+    query = urllib.parse.quote(email, safe="")
+    rows = _supabase_rest_request(
+        f"user_profile?email=eq.{query}&select=email,payment_processed&limit=1",
+        method="GET",
+    )
+    if isinstance(rows, list) and rows:
+        row = rows[0]
+        return row if isinstance(row, dict) else None
+    return None
+
+
+def _ensure_user_profile(email: str, payment_processed: bool) -> None:
+    profile = _get_user_profile(email)
+    if profile is None:
+        _supabase_rest_request(
+            "user_profile",
+            method="POST",
+            body=[{"email": email, "payment_processed": payment_processed}],
+        )
+        return
+    if bool(profile.get("payment_processed")) != payment_processed:
+        query = urllib.parse.quote(email, safe="")
+        _supabase_rest_request(
+            f"user_profile?email=eq.{query}",
+            method="PATCH",
+            body={"payment_processed": payment_processed},
+        )
+
+
+def _set_payment_processed(email: str, payment_processed: bool) -> None:
+    _ensure_user_profile(email, payment_processed=payment_processed)
+
+
+def _get_current_user_claims(
     credentials: HTTPAuthorizationCredentials = Depends(auth_scheme),
-) -> str:
+) -> dict:
     if not credentials:
         raise HTTPException(status_code=401, detail="Authentication required.")
 
@@ -355,7 +450,8 @@ def get_current_user(
             raise HTTPException(status_code=401, detail="Supabase token expired. Please log in again.")
         if SUPABASE_DEV_TRUST_CLAIMS and claims.get("email"):
             # Development-only fallback when backend cannot reach Supabase Auth.
-            return _normalize_email(claims.get("email", ""))
+            email = _normalize_email(claims.get("email", ""))
+            return {"email": email}
         raise HTTPException(
             status_code=401,
             detail=(
@@ -363,6 +459,26 @@ def get_current_user(
                 f"{remote_error or 'Token verification failed'}."
             ),
         )
+    return payload
+
+
+def get_current_user_unpaid_allowed(
+    claims: dict = Depends(_get_current_user_claims),
+) -> str:
+    email = _normalize_email(claims.get("email", ""))
+    if not email:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    return email
+
+
+def get_current_user(
+    email: str = Depends(get_current_user_unpaid_allowed),
+) -> str:
+    profile = _get_user_profile(email)
+    if profile is None:
+        raise HTTPException(status_code=403, detail="No user profile found. Complete signup first.")
+    if not bool(profile.get("payment_processed")):
+        raise HTTPException(status_code=403, detail="Payment required. Complete your subscription first.")
     return email
 
 
@@ -1422,17 +1538,140 @@ async def auth_signup_verify(payload: SignupVerifyRequest):
             conn.commit()
             raise HTTPException(status_code=400, detail="Invalid verification code.")
 
-    user_result = _create_supabase_user(email, password)
+    user_result, _user_id = _create_supabase_user(email, password)
     if user_result == "exists":
         with _db_conn() as conn:
             conn.execute("DELETE FROM signup_otp_codes WHERE email = ?", (email,))
             conn.commit()
         raise HTTPException(status_code=409, detail="Account already exists. Log in instead.")
 
+    _ensure_user_profile(email, payment_processed=False)
+
     with _db_conn() as conn:
         conn.execute("DELETE FROM signup_otp_codes WHERE email = ?", (email,))
         conn.commit()
     return {"status": "ok", "message": "Email verified. Account created."}
+
+
+@app.get("/auth/payment-status")
+async def auth_payment_status(current_user: str = Depends(get_current_user_unpaid_allowed)):
+    profile = _get_user_profile(current_user)
+    return {
+        "status": "ok",
+        "payment_processed": bool(profile and profile.get("payment_processed")),
+        "has_profile": bool(profile),
+    }
+
+
+def _stripe_line_item(billing_cycle: str) -> dict:
+    if billing_cycle == "monthly":
+        return {
+            "price_data": {
+                "currency": "gbp",
+                "unit_amount": 50000,
+                "recurring": {"interval": "month"},
+                "product_data": {"name": "TrueFormat Monthly Subscription"},
+            },
+            "quantity": 1,
+        }
+    return {
+        "price_data": {
+            "currency": "gbp",
+            "unit_amount": 500000,
+            "recurring": {"interval": "year"},
+            "product_data": {"name": "TrueFormat Annual Subscription"},
+        },
+        "quantity": 1,
+    }
+
+
+@app.post("/billing/create-checkout-session")
+async def billing_create_checkout_session(payload: BillingCheckoutRequest):
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="STRIPE_SECRET_KEY is not configured on backend.")
+
+    email = _normalize_email(payload.email)
+    billing_cycle = payload.billing_cycle.strip().lower()
+    if billing_cycle not in {"monthly", "annual"}:
+        raise HTTPException(status_code=422, detail="billing_cycle must be monthly or annual.")
+
+    if _get_user_profile(email) is None:
+        _ensure_user_profile(email, payment_processed=False)
+
+    success_url = f"{FRONTEND_BASE_URL}/subscription?success=1&session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{FRONTEND_BASE_URL}/subscription?canceled=1"
+
+    try:
+        checkout_session = stripe.checkout.Session.create(
+            mode="subscription",
+            customer_email=email,
+            success_url=success_url,
+            cancel_url=cancel_url,
+            line_items=[_stripe_line_item(billing_cycle)],
+            metadata={"email": email, "billing_cycle": billing_cycle},
+            allow_promotion_codes=True,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Stripe checkout session failed: {str(e)[:220]}")
+
+    return {"status": "ok", "checkout_url": checkout_session.url}
+
+
+@app.get("/billing/checkout-session")
+async def billing_checkout_session(session_id: str):
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="STRIPE_SECRET_KEY is not configured on backend.")
+    if not session_id:
+        raise HTTPException(status_code=422, detail="session_id is required.")
+
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch Stripe session: {str(e)[:220]}")
+
+    paid = session.payment_status == "paid" and session.status == "complete"
+    metadata = session.metadata or {}
+    raw_email = (session.customer_details or {}).get("email") or metadata.get("email")
+    email = ""
+    if raw_email:
+        email = _normalize_email(raw_email)
+        if paid:
+            _set_payment_processed(email, True)
+
+    return {
+        "status": "ok",
+        "payment_processed": paid,
+        "email": email,
+    }
+
+
+@app.post("/billing/webhook")
+async def billing_webhook(request: FastAPIRequest):
+    if not STRIPE_WEBHOOK_SECRET:
+        raise HTTPException(status_code=500, detail="STRIPE_WEBHOOK_SECRET is not configured on backend.")
+
+    payload = await request.body()
+    signature = request.headers.get("stripe-signature", "")
+
+    try:
+        event = stripe.Webhook.construct_event(payload, signature, STRIPE_WEBHOOK_SECRET)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid Stripe webhook signature: {str(e)[:180]}")
+
+    event_type = event.get("type")
+    event_data = (event.get("data") or {}).get("object") or {}
+
+    if event_type in {"checkout.session.completed", "invoice.paid"}:
+        metadata = event_data.get("metadata") or {}
+        customer_email = (
+            event_data.get("customer_email")
+            or ((event_data.get("customer_details") or {}).get("email"))
+            or metadata.get("email")
+        )
+        if customer_email:
+            _set_payment_processed(_normalize_email(customer_email), True)
+
+    return {"status": "ok"}
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...), current_user: str = Depends(get_current_user)):

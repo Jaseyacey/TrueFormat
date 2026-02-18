@@ -25,6 +25,7 @@ export default function TopNav({ authed, onLogout }) {
       <nav className="flex w-full flex-wrap items-center gap-1 sm:w-auto tf-nav">
         <NavLink path="/">Home</NavLink>
         <NavLink path="/blog">Blog</NavLink>
+        <NavLink path="/subscription">Subscription</NavLink>
         <NavLink path="/terms">Terms</NavLink>
         <NavLink path="/privacy">Privacy</NavLink>
         {authed ? (
