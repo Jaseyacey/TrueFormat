@@ -197,6 +197,8 @@ def _send_signup_otp_email(email: str, code: str) -> None:
         headers={
             "Authorization": f"Bearer {RESEND_API_KEY}",
             "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "TrueFormatAPI/1.0 (+https://trueformat.onrender.com)",
         },
         method="POST",
     )
