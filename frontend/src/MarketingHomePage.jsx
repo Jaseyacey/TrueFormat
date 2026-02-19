@@ -86,6 +86,81 @@ function DiffCard({ title, rows, columns, variant }) {
   );
 }
 
+function FeatureComparisonTable() {
+  const rows = [
+    {
+      feature: 'Best Used For',
+      hubdoc: 'Simple Receipts',
+      dext: 'General Bookkeeping',
+      trueformat: '50+ Line Supplier Invoices',
+    },
+    {
+      feature: 'Line-Item Extraction',
+      hubdoc: 'Manual Entry Required',
+      dext: 'Costs Extra Credits',
+      trueformat: 'Native & Unlimited',
+    },
+    {
+      feature: 'Alphanumeric SKU Protection',
+      hubdoc: 'Fails (Excel Date Corruption)',
+      dext: 'Often Drops Leading Zeros',
+      trueformat: '100% Deterministic Parsing',
+    },
+    {
+      feature: 'Pre-Export Math Audit',
+      hubdoc: 'No',
+      dext: 'No',
+      trueformat: 'Yes',
+    },
+  ];
+
+  const competitorCellClass = (value) => {
+    if (
+      value.includes('Fails') ||
+      value.includes('Manual') ||
+      value === 'No'
+    ) {
+      return 'text-red-500';
+    }
+    if (value.includes('Costs Extra') || value.includes('Often Drops')) {
+      return 'text-yellow-600';
+    }
+    return 'text-gray-500';
+  };
+
+  return (
+    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 backdrop-blur-md">
+      <div className="mb-4">
+        <h2 className="text-2xl font-bold text-[#F8FAFC]">Feature Comparison</h2>
+        <p className="mt-1 text-sm text-[#94A3B8]">Purpose-built extraction for complex supplier invoices.</p>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-[760px] w-full border-collapse text-left">
+          <thead>
+            <tr className="border-b border-white/10">
+              <th className="px-4 py-3 text-sm font-semibold text-[#CBD5E1]">Feature</th>
+              <th className="px-4 py-3 text-sm font-semibold text-gray-400">Hubdoc</th>
+              <th className="px-4 py-3 text-sm font-semibold text-gray-400">Dext/AutoEntry</th>
+              <th className="px-4 py-3 text-sm font-semibold text-green-600">TrueFormat</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.feature} className="border-b border-white/10 last:border-b-0">
+                <td className="px-4 py-3 text-sm font-medium text-[#F8FAFC]">{row.feature}</td>
+                <td className={`px-4 py-3 text-sm ${competitorCellClass(row.hubdoc)}`}>{row.hubdoc}</td>
+                <td className={`px-4 py-3 text-sm ${competitorCellClass(row.dext)}`}>{row.dext}</td>
+                <td className="px-4 py-3 text-sm text-green-600">{row.trueformat}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 export default function MarketingHomePage({ onPrimaryCta }) {
   const [rawInput, setRawInput] = useState('000123');
   const hardened = useMemo(() => normalizeValue(rawInput), [rawInput]);
@@ -162,6 +237,8 @@ export default function MarketingHomePage({ onPrimaryCta }) {
             variant="after"
           />
         </section>
+
+        <FeatureComparisonTable />
 
         <section className="rounded-2xl border border-white/10 bg-[#27272A]/55 p-6 backdrop-blur-md tf-how">
           <div className="mb-5">
