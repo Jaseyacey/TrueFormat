@@ -129,7 +129,7 @@ function FeatureComparisonTable() {
   };
 
   return (
-    <section className="card border border-secondary-subtle shadow bg-dark text-light">
+    <section className="card border border-secondary-subtle shadow bg-dark text-light tf-compare">
       <div className="card-body p-3 p-md-4">
         <div className="mb-3">
           <h2 className="h4 fw-bold mb-1 text-white">Feature Comparison</h2>

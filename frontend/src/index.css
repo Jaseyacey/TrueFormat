@@ -32,6 +32,14 @@ body {
     #020617;
 }
 
+body[data-theme='light'] {
+  color: #0f172a;
+  background:
+    radial-gradient(900px 520px at 8% 8%, rgba(56, 189, 248, 0.12), transparent 56%),
+    radial-gradient(760px 420px at 92% 2%, rgba(5, 150, 105, 0.14), transparent 58%),
+    #e2e8f0;
+}
+
 #root {
   min-height: 100vh;
 }
@@ -559,6 +567,110 @@ body {
   text-align: center;
   padding: 14px;
   color: #94a3b8;
+}
+
+body[data-theme='light'] .tf-topnav {
+  border-color: rgba(2, 132, 199, 0.25);
+  background: linear-gradient(90deg, #f8fafc 0%, #e2e8f0 55%, #f8fafc 100%);
+}
+
+body[data-theme='light'] .tf-brand-title {
+  color: #0f172a;
+}
+
+body[data-theme='light'] .tf-nav-link,
+body[data-theme='light'] .tf-btn,
+body[data-theme='light'] .tf-theme-toggle {
+  color: #334155;
+  border-color: rgba(100, 116, 139, 0.3);
+}
+
+body[data-theme='light'] .tf-nav-link:hover,
+body[data-theme='light'] .tf-btn:hover,
+body[data-theme='light'] .tf-theme-toggle:hover {
+  border-color: #0284c7;
+  color: #0f172a;
+}
+
+body[data-theme='light'] .tf-home {
+  border-color: rgba(100, 116, 139, 0.25);
+  background: rgba(248, 250, 252, 0.92);
+  color: #0f172a;
+}
+
+body[data-theme='light'] .tf-hero {
+  border-color: rgba(5, 150, 105, 0.28);
+  background: linear-gradient(115deg, rgba(241, 245, 249, 0.95), rgba(209, 250, 229, 0.65));
+}
+
+body[data-theme='light'] .tf-hero-title,
+body[data-theme='light'] .tf-card-title {
+  color: #0f172a;
+}
+
+body[data-theme='light'] .tf-hero-copy {
+  color: #334155;
+}
+
+body[data-theme='light'] .tf-shame,
+body[data-theme='light'] .tf-how,
+body[data-theme='light'] .tf-playground,
+body[data-theme='light'] .tf-integrations,
+body[data-theme='light'] .tf-home-footer,
+body[data-theme='light'] .tf-playground-card {
+  border-color: rgba(100, 116, 139, 0.25);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+body[data-theme='light'] .tf-shame-item,
+body[data-theme='light'] .tf-integration-pill,
+body[data-theme='light'] .tf-how-card,
+body[data-theme='light'] .tf-badge {
+  border-color: rgba(100, 116, 139, 0.22);
+  background: rgba(248, 250, 252, 0.9);
+  color: #334155;
+}
+
+body[data-theme='light'] .tf-diff-before {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(254, 242, 242, 0.95);
+}
+
+body[data-theme='light'] .tf-diff-after {
+  border-color: rgba(5, 150, 105, 0.45);
+  background: rgba(236, 253, 245, 0.95);
+}
+
+body[data-theme='light'] .tf-diff-table th,
+body[data-theme='light'] .tf-diff-table td {
+  color: #0f172a;
+  border-bottom-color: rgba(100, 116, 139, 0.25);
+}
+
+body[data-theme='light'] .tf-compare {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: rgba(100, 116, 139, 0.25) !important;
+}
+
+body[data-theme='light'] .tf-compare .table {
+  --bs-table-bg: #ffffff;
+  --bs-table-striped-bg: #f8fafc;
+  --bs-table-hover-bg: #f1f5f9;
+  --bs-table-border-color: rgba(100, 116, 139, 0.25);
+  --bs-table-color: #0f172a;
+}
+
+body[data-theme='light'] .text-\[\#F8FAFC\],
+body[data-theme='light'] .text-white,
+body[data-theme='light'] .text-light {
+  color: #0f172a !important;
+}
+
+body[data-theme='light'] .text-\[\#CBD5E1\],
+body[data-theme='light'] .text-\[\#94A3B8\],
+body[data-theme='light'] .text-light-emphasis {
+  color: #334155 !important;
 }
 
 @media (max-width: 720px) {

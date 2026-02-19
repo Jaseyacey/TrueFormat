@@ -12,7 +12,7 @@ function NavLink({ path, children }) {
   );
 }
 
-export default function TopNav({ authed, onLogout }) {
+export default function TopNav({ authed, onLogout, theme, onToggleTheme }) {
   return (
     <header className="sticky top-3 z-50 mb-5 flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-[#38BDF8]/20 bg-[linear-gradient(90deg,#020617_0%,#03122d_55%,#020617_100%)] px-4 py-3 backdrop-blur-md sm:items-center tf-topnav">
       <button type="button" className="flex items-center gap-3 tf-brand" onClick={() => navigate('/')}>
@@ -26,8 +26,16 @@ export default function TopNav({ authed, onLogout }) {
         <NavLink path="/">Home</NavLink>
         <NavLink path="/blog">Blog</NavLink>
         <NavLink path="/subscription">Subscription</NavLink>
+        <NavLink path="/contact">Contact</NavLink>
         <NavLink path="/terms">Terms</NavLink>
         <NavLink path="/privacy">Privacy</NavLink>
+        <button
+          type="button"
+          className="rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-[#94A3B8] transition hover:border-[#38BDF8] hover:text-[#F8FAFC] tf-btn tf-btn-ghost tf-theme-toggle"
+          onClick={onToggleTheme}
+        >
+          {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+        </button>
         {authed ? (
           <>
             <NavLink path="/app">App</NavLink>

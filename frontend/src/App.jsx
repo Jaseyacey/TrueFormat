@@ -8,11 +8,19 @@ import AuthPage from './components/auth/AuthPage.jsx';
 import AppWorkspace from './components/workspace/AppWorkspace.jsx';
 import SubscriptionPage from './components/billing/SubscriptionPage.jsx';
 import StaticPage from './components/common/StaticPage.jsx';
+import ContactPage from './components/common/ContactPage.jsx';
 import { navigate } from './utils/navigation.js';
 import { useAuth } from './hooks/useAuth.js';
 
+function getInitialTheme() {
+  const saved = window.localStorage.getItem('tf-theme');
+  if (saved === 'light' || saved === 'dark') return saved;
+  return 'dark';
+}
+
 export default function App() {
   const [path, setPath] = useState(window.location.pathname);
+  const [theme, setTheme] = useState(getInitialTheme);
   const auth = useAuth();
 
   useEffect(() => {
@@ -20,6 +28,13 @@ export default function App() {
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute('data-bs-theme', theme);
+    document.body.setAttribute('data-theme', theme);
+    window.localStorage.setItem('tf-theme', theme);
+  }, [theme]);
 
   const authBindings = {
     email: auth.email,
@@ -52,10 +67,14 @@ export default function App() {
     navigate('/');
   };
 
+  const handleThemeToggle = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
   if (!supabaseConfigured) {
     return (
       <div className="mx-auto w-[min(1180px,94vw)] py-6">
-        <TopNav authed={false} onLogout={handleLogout} />
+        <TopNav authed={false} onLogout={handleLogout} theme={theme} onToggleTheme={handleThemeToggle} />
         <ConfigErrorPage />
       </div>
     );
@@ -98,6 +117,8 @@ export default function App() {
         <p>Do not upload sensitive documents unless your organization has approved this workflow.</p>
       </StaticPage>
     );
+  } else if (path === '/contact') {
+    content = <ContactPage />;
   } else if (path === '/blog') {
     content = <BlogMappingMess onCta={() => navigate('/signup')} />;
   } else {
@@ -106,7 +127,7 @@ export default function App() {
 
   return (
     <div className="mx-auto w-[min(1180px,94vw)] py-6 tf-page">
-      <TopNav authed={Boolean(auth.token)} onLogout={handleLogout} />
+      <TopNav authed={Boolean(auth.token)} onLogout={handleLogout} theme={theme} onToggleTheme={handleThemeToggle} />
       {content}
     </div>
   );
