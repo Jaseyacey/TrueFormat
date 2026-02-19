@@ -120,42 +120,52 @@ function FeatureComparisonTable() {
       value.includes('Manual') ||
       value === 'No'
     ) {
-      return 'text-red-500';
+      return 'text-danger';
     }
     if (value.includes('Costs Extra') || value.includes('Often Drops')) {
-      return 'text-yellow-600';
+      return 'text-warning';
     }
-    return 'text-gray-500';
+    return 'text-secondary';
   };
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 backdrop-blur-md">
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold text-[#F8FAFC]">Feature Comparison</h2>
-        <p className="mt-1 text-sm text-[#94A3B8]">Purpose-built extraction for complex supplier invoices.</p>
-      </div>
+    <section className="card border border-secondary-subtle shadow bg-dark text-light">
+      <div className="card-body p-3 p-md-4">
+        <div className="mb-3">
+          <h2 className="h4 fw-bold mb-1 text-white">Feature Comparison</h2>
+          <p className="text-secondary mb-0">
+            Purpose-built extraction for complex supplier invoices.
+          </p>
+        </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-[760px] w-full border-collapse text-left">
-          <thead>
-            <tr className="border-b border-white/10">
-              <th className="px-4 py-3 text-sm font-semibold text-[#CBD5E1]">Feature</th>
-              <th className="px-4 py-3 text-sm font-semibold text-gray-400">Hubdoc</th>
-              <th className="px-4 py-3 text-sm font-semibold text-gray-400">Dext/AutoEntry</th>
-              <th className="px-4 py-3 text-sm font-semibold text-green-600">TrueFormat</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.feature} className="border-b border-white/10 last:border-b-0">
-                <td className="px-4 py-3 text-sm font-medium text-[#F8FAFC]">{row.feature}</td>
-                <td className={`px-4 py-3 text-sm ${competitorCellClass(row.hubdoc)}`}>{row.hubdoc}</td>
-                <td className={`px-4 py-3 text-sm ${competitorCellClass(row.dext)}`}>{row.dext}</td>
-                <td className="px-4 py-3 text-sm text-green-600">{row.trueformat}</td>
+        <div className="table-responsive">
+          <table className="table table-dark table-sm table-hover align-middle mb-0" style={{ minWidth: '760px' }}>
+            <thead>
+              <tr>
+                <th scope="col" className="fw-bold text-white">Feature</th>
+                <th scope="col" className="fw-semibold text-light-emphasis">Hubdoc</th>
+                <th scope="col" className="fw-semibold text-light-emphasis">Dext/AutoEntry</th>
+                <th scope="col" className="fw-semibold text-success">TrueFormat</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.feature}>
+                  <th scope="row" className="fw-bold text-white">{row.feature}</th>
+                  <td className={`${competitorCellClass(row.hubdoc)} fw-semibold`}>{row.hubdoc}</td>
+                  <td className={`${competitorCellClass(row.dext)} fw-semibold`}>{row.dext}</td>
+                  <td className="text-success fw-semibold">{row.trueformat}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="d-flex flex-wrap gap-2 mt-3">
+          <span className="badge text-bg-danger-subtle border border-danger-subtle" style={{ color: '#EF4444' }}>Competitor Limitations</span>
+          <span className="badge text-bg-warning-subtle text-warning border border-warning-subtle">Credit/Parsing Risks</span>
+          <span className="badge text-bg-success-subtle text-success border border-success-subtle">TrueFormat Strengths</span>
+        </div>
       </div>
     </section>
   );
@@ -177,7 +187,7 @@ export default function MarketingHomePage({ onPrimaryCta }) {
               <span className="inline-flex h-16 w-16 items-center justify-center rounded-full border border-[#38BDF8]/40 bg-[#1f2e4a] shadow-[0_0_28px_rgba(56,189,248,0.2)] tf-hero-logo-badge">
                 <img src="/trueformat-logo.svg" alt="TrueFormat logo" className="h-12 w-12 rounded-full tf-logo" />
               </span>
-              <p className="inline-flex min-h-12 max-w-full items-center rounded-full border border-[#38BDF8]/35 bg-[linear-gradient(90deg,rgba(5,150,105,0.35),rgba(5,150,105,0.2))] px-4 py-2 text-center text-[10px] font-extrabold uppercase tracking-[0.15em] text-[#8AA0B2] sm:whitespace-nowrap sm:px-7 sm:text-[13px] sm:tracking-[0.22em] lg:text-[15px] tf-hero-pill">
+              <p className="flex min-h-12 w-full max-w-full items-center justify-center rounded-full border border-[#38BDF8]/35 bg-[linear-gradient(90deg,rgba(5,150,105,0.35),rgba(5,150,105,0.2))] px-4 py-2 text-center text-[10px] font-extrabold uppercase tracking-[0.15em] text-[#8AA0B2] sm:w-auto sm:whitespace-nowrap sm:px-7 sm:text-[13px] sm:tracking-[0.22em] lg:text-[15px] tf-hero-pill">
                 Deterministic Data Ingestion
               </p>
             </div>

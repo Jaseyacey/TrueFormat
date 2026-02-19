@@ -316,6 +316,10 @@ body {
   gap: 32px;
 }
 
+.tf-home-main > * {
+  min-width: 0;
+}
+
 .tf-hero {
   border: 1px solid rgba(16, 185, 129, 0.3);
   border-radius: 16px;
@@ -352,6 +356,7 @@ body {
   max-width: 720px;
   font-size: 1.05rem;
   color: #cbd5e1;
+  overflow-wrap: anywhere;
 }
 
 .tf-hero-actions {
@@ -580,9 +585,13 @@ body {
   }
 
   .tf-hero-pill {
+    width: 100%;
+    max-width: 100%;
     font-size: 0.72rem;
     letter-spacing: 0.14em;
     padding: 6px 12px;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .tf-trust-grid,
