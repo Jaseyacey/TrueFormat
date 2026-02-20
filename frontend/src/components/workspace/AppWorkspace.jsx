@@ -159,7 +159,16 @@ export default function AppWorkspace({ token, onUnauthorized }) {
     return `${header}\n${body}`;
   };
 
-  const handleDownloadEditedCsv = () => {
+  const incrementDownloadTracking = async () => {
+    const res = await fetch(`${API_BASE}/track-download`, { method: 'POST', headers: authHeader });
+    if (res.status === 401) {
+      await handleUnauthorized();
+      return;
+    }
+    if (!res.ok) return;
+  };
+
+  const handleDownloadEditedCsv = async () => {
     const rows = editableRows.length ? editableRows : preview;
     if (!rows.length) {
       setError('No data to export.');
@@ -176,6 +185,7 @@ export default function AppWorkspace({ token, onUnauthorized }) {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      await incrementDownloadTracking();
       setStatus(hasEdits ? 'Edited CSV exported successfully.' : 'CSV exported successfully.');
       setError('');
     } catch (e) {
@@ -211,6 +221,7 @@ export default function AppWorkspace({ token, onUnauthorized }) {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       setStatus('Original CSV exported successfully.');
+      setError('');
     } catch (e) {
       setError(e.message || 'Failed to export CSV.');
       setStatus('');

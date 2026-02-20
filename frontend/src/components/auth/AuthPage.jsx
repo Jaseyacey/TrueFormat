@@ -14,9 +14,15 @@ export default function AuthPage({
   onSubmit,
   onResendOtp,
   isOtpStep,
+  acceptTerms = false,
+  setAcceptTerms = () => {},
 }) {
   const inputClass =
     'w-full rounded-lg border border-white/15 bg-[#27272A]/65 px-3 py-2 text-sm text-[#F8FAFC] outline-none transition focus:border-[#38BDF8] focus:ring-2 focus:ring-[#38BDF8]/30';
+  const signupFormReady =
+    mode !== 'signup'
+    || isOtpStep
+    || (email.trim() !== '' && password !== '' && confirmPassword !== '' && acceptTerms);
 
   return (
     <section className="mx-auto w-full max-w-xl rounded-2xl border border-white/10 bg-[#27272A]/55 p-7 backdrop-blur-md">
@@ -55,6 +61,27 @@ export default function AuthPage({
                 required
               />
             )}
+            {mode === 'signup' && (
+              <label className="mt-1 flex items-start gap-2 text-sm text-[#CBD5E1]">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={acceptTerms}
+                  onChange={(e) => setAcceptTerms(e.target.checked)}
+                />
+                <span>
+                  I accept the{' '}
+                  <button
+                    type="button"
+                    className="font-semibold text-[#38BDF8] underline underline-offset-2"
+                    onClick={() => navigate('/terms')}
+                  >
+                    Terms and Conditions
+                  </button>
+                  .
+                </span>
+              </label>
+            )}
           </>
         ) : (
           <>
@@ -75,8 +102,9 @@ export default function AuthPage({
           </>
         )}
         <button
-          className="rounded-lg bg-[#38BDF8] px-4 py-2 text-sm font-semibold text-[#020617] transition hover:bg-[#475569]"
+          className="rounded-lg bg-[#38BDF8] px-4 py-2 text-sm font-semibold text-[#020617] transition hover:bg-[#475569] disabled:cursor-not-allowed disabled:opacity-60"
           type="submit"
+          disabled={!signupFormReady}
         >
           {mode === 'login' ? 'Log in' : isOtpStep ? 'Verify code' : 'Sign up'}
         </button>

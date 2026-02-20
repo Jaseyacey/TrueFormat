@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { resolveApiBase } from '../../utils/apiBase.js';
 import { navigate } from '../../utils/navigation.js';
+import { trackEvent } from '../../utils/analytics.js';
 
 const API_BASE = resolveApiBase();
 
@@ -54,11 +55,16 @@ export default function SubscriptionPage({ defaultEmail = '' }) {
         if (!active) return;
         if (data?.payment_processed) {
           setStatus('Payment completed. You can now log in.');
+          trackEvent('checkout_verified_success', { session_id_present: true });
           return;
         }
         setStatus('Payment is still processing. Refresh this page in a few seconds.');
+        trackEvent('checkout_verification_pending', { session_id_present: true });
       } catch (e) {
-        if (active) setStatus(e.message || 'Unable to verify payment status.');
+        if (active) {
+          setStatus(e.message || 'Unable to verify payment status.');
+          trackEvent('checkout_verification_failed');
+        }
       }
     };
 
@@ -71,17 +77,21 @@ export default function SubscriptionPage({ defaultEmail = '' }) {
   useEffect(() => {
     if (checkoutCanceled) {
       setStatus('Checkout was canceled. Choose a plan to continue.');
+      trackEvent('checkout_canceled');
     }
   }, [checkoutCanceled]);
 
   const startCheckout = async (billingCycle) => {
     if (!email.trim()) {
       setStatus('Enter your account email to continue.');
+      trackEvent('checkout_blocked_missing_email', { billing_cycle: billingCycle });
       return;
     }
 
     setIsLoading(true);
     setStatus('Creating secure checkout...');
+    trackEvent('checkout_started', { billing_cycle: billingCycle });
+
     try {
       const res = await fetch(`${API_BASE}/billing/create-checkout-session`, {
         method: 'POST',
@@ -94,10 +104,12 @@ export default function SubscriptionPage({ defaultEmail = '' }) {
       if (!res.ok) throw new Error(await getApiError(res, `Checkout failed (${res.status})`));
       const data = await res.json();
       if (!data?.checkout_url) throw new Error('Checkout URL missing from server response.');
+      trackEvent('checkout_redirected', { billing_cycle: billingCycle });
       window.location.href = data.checkout_url;
     } catch (e) {
       setStatus(e.message || 'Unable to start checkout.');
       setIsLoading(false);
+      trackEvent('checkout_failed', { billing_cycle: billingCycle });
     }
   };
 

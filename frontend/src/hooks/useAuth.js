@@ -211,6 +211,7 @@ export function useAuth() {
     signupVerifiedPendingPayment,
     setSignupVerifiedPendingPayment,
     authStatus,
+    setAuthStatus,
     submitAuth,
     resendSignupOtp,
     logout,
