@@ -101,6 +101,12 @@ function FeatureComparisonTable() {
       trueformat: 'Native & Unlimited',
     },
     {
+      feature: 'Enterprise OCR (e.g., Lido)',
+      hubdoc: 'Cheap/Free — breaks on line items',
+      dext: 'Cheap/Free — breaks on line items',
+      trueformat: '£5k flat. Flawless line items. Deterministic math audit. Built just for this.',
+    },
+    {
       feature: 'Alphanumeric SKU Protection',
       hubdoc: 'Fails (Excel Date Corruption)',
       dext: 'Often Drops Leading Zeros',
