@@ -235,9 +235,56 @@ export default function App() {
   } else if (path === '/privacy') {
     content = (
       <StaticPage title="Privacy Policy">
-        <p>TrueFormat processes files you upload to produce structured export outputs.</p>
-        <p>Interest form data is stored to contact you about onboarding and product updates.</p>
-        <p>Do not upload sensitive documents unless your organization has approved this workflow.</p>
+        <p><strong>TrueFormat Privacy Policy</strong></p>
+        <p><strong>Last Updated:</strong> February 20, 2026</p>
+
+        <p><strong>1. Introduction</strong></p>
+        <p>
+          TrueFormat (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;) respects your privacy and is committed to protecting your
+          personal and financial data. This Privacy Policy explains how we collect, use, and protect your information
+          when you use our invoice data extraction software, in compliance with the UK General Data Protection Regulation
+          (UK GDPR).
+        </p>
+
+        <p><strong>2. The Data We Collect</strong></p>
+        <p>We collect two types of data:</p>
+        <p>
+          <strong>Account Data:</strong> Your name, email address, and billing information (processed securely via our
+          payment provider, e.g., Stripe).
+        </p>
+        <p>
+          <strong>Processing Data (Invoices):</strong> The PDF, CSV, or Excel files you upload for extraction.
+        </p>
+
+        <p><strong>3. How We Process Your Invoices (Our &quot;Zero Retention&quot; Guarantee)</strong></p>
+        <p>TrueFormat acts as a Data Processor for the documents you upload.</p>
+        <p>
+          <strong>In-Memory Processing:</strong> When you upload an invoice, it is processed transiently to extract the
+          required line items and map them to your accounting format (e.g., Xero).
+        </p>
+        <p>
+          <strong>Immediate Deletion:</strong> Once your session is complete and your formatted CSV is generated and
+          downloaded, the original uploaded file and the extracted data are permanently deleted from our servers. We do
+          not keep backups of your clients&apos; invoices.
+        </p>
+        <p>
+          <strong>No AI Training:</strong> We do not use your documents, financial data, or PII to train, fine-tune, or
+          improve any machine learning or AI models.
+        </p>
+
+        <p><strong>4. Third-Party Service Providers</strong></p>
+        <p>
+          We use trusted third-party services to operate our infrastructure (e.g., secure cloud hosting via AWS/Google
+          Cloud and payment processing via Stripe). These providers are GDPR-compliant and only process data as
+          instructed by us.
+        </p>
+
+        <p><strong>5. Your Data Rights</strong></p>
+        <p>
+          Under UK GDPR, you have the right to access, rectify, or erase your Account Data at any time. Because we do
+          not store your Processing Data (invoices) after your session ends, there is no historical invoice data for us
+          to return or delete upon request. To manage your Account Data, please contact us at info@trueformat.co.uk.
+        </p>
       </StaticPage>
     );
   } else if (path === '/contact') {
