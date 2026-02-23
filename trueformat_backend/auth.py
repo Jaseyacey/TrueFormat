@@ -266,13 +266,37 @@ def supabase_rest_request(
 def get_user_profile(email: str) -> dict | None:
     query = urllib.parse.quote(email, safe="")
     rows = supabase_rest_request(
-        f"user_profile?email=eq.{query}&select=email,payment_processed&limit=1",
+        f"user_profile?email=eq.{query}&select=email,payment_processed,doc_download_tracking&limit=1",
         method="GET",
     )
     if isinstance(rows, list) and rows:
         row = rows[0]
         return row if isinstance(row, dict) else None
     return None
+
+
+def increment_doc_download_tracking(email: str, amount: int = 1) -> int:
+    if amount < 1:
+        raise HTTPException(status_code=400, detail="Download increment must be at least 1.")
+
+    profile = get_user_profile(email)
+    if profile is None:
+        raise HTTPException(status_code=403, detail="No user profile found. Complete signup first.")
+
+    try:
+        current = int(profile.get("doc_download_tracking") or 0)
+    except (TypeError, ValueError):
+        current = 0
+    next_value = current + int(amount)
+
+    query = urllib.parse.quote(email, safe="")
+    supabase_rest_request(
+        f"user_profile?email=eq.{query}",
+        method="PATCH",
+        body={"doc_download_tracking": next_value},
+        extra_headers={"Prefer": "return=minimal"},
+    )
+    return next_value
 
 
 def ensure_user_profile(email: str, payment_processed: bool) -> None:

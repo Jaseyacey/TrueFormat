@@ -76,7 +76,22 @@ def read_checkout_session_paid(session_id: str) -> bool:
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Failed to fetch Stripe session: {str(e)[:220]}")
 
-    return session.payment_status == "paid" and session.status == "complete"
+    paid = session.payment_status == "paid" and session.status == "complete"
+    if not paid:
+        return False
+
+    customer_email = (
+        session.get("customer_email")
+        or ((session.get("customer_details") or {}).get("email"))
+        or ((session.get("metadata") or {}).get("email"))
+    )
+    if customer_email:
+        try:
+            set_payment_processed(normalize_email(customer_email), True)
+        except Exception:
+            # Keep checkout verification resilient even if profile sync fails.
+            pass
+    return True
 
 
 def apply_webhook_event(payload: bytes, signature: str) -> None:
@@ -98,5 +113,11 @@ def apply_webhook_event(payload: bytes, signature: str) -> None:
             or ((event_data.get("customer_details") or {}).get("email"))
             or metadata.get("email")
         )
+        if not customer_email and event_type == "invoice.paid" and event_data.get("customer"):
+            try:
+                customer = stripe.Customer.retrieve(event_data.get("customer"))
+                customer_email = customer.get("email")
+            except Exception:
+                customer_email = None
         if customer_email:
             set_payment_processed(normalize_email(customer_email), True)

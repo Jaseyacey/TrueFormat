@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+    <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:xoev-de:kosit:standard:xrechnung_2.2</cbc:CustomizationID>
+    <cbc:ID>INV-DE-2026-901</cbc:ID>
+    <cbc:IssueDate>2026-02-23</cbc:IssueDate>
+    <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
+    <cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>
+    <cbc:BuyerReference>12345-67890-12</cbc:BuyerReference>
+
+    <cac:AccountingSupplierParty>
+        <cac:Party>
+            <cac:PartyName>
+                <cbc:Name>Muenchen Manufacturing GmbH</cbc:Name>
+            </cac:PartyName>
+            <cac:PostalAddress>
+                <cbc:StreetName>Industriestrasse 1</cbc:StreetName>
+                <cbc:CityName>Munich</cbc:CityName>
+                <cbc:PostalZone>80331</cbc:PostalZone>
+                <cac:Country>
+                    <cbc:IdentificationCode>DE</cbc:IdentificationCode>
+                </cac:Country>
+            </cac:PostalAddress>
+            <cac:PartyTaxScheme>
+                <cbc:CompanyID>DE123456789</cbc:CompanyID>
+                <cac:TaxScheme>
+                    <cbc:ID>VAT</cbc:ID>
+                </cac:TaxScheme>
+            </cac:PartyTaxScheme>
+        </cac:Party>
+    </cac:AccountingSupplierParty>
+
+    <cac:AccountingCustomerParty>
+        <cac:Party>
+            <cac:PartyName>
+                <cbc:Name>London Precision Engineering Ltd</cbc:Name>
+            </cac:PartyName>
+            <cac:PostalAddress>
+                <cbc:StreetName>100 Tech Lane</cbc:StreetName>
+                <cbc:CityName>London</cbc:CityName>
+                <cbc:PostalZone>E1 6AN</cbc:PostalZone>
+                <cac:Country>
+                    <cbc:IdentificationCode>GB</cbc:IdentificationCode>
+                </cac:Country>
+            </cac:PostalAddress>
+        </cac:Party>
+    </cac:AccountingCustomerParty>
+
+    <cac:LegalMonetaryTotal>
+        <cbc:LineExtensionAmount currencyCode="EUR">1500.00</cbc:LineExtensionAmount>
+        <cbc:TaxExclusiveAmount currencyCode="EUR">1500.00</cbc:TaxExclusiveAmount>
+        <cbc:TaxInclusiveAmount currencyCode="EUR">1785.00</cbc:TaxInclusiveAmount>
+        <cbc:PayableAmount currencyCode="EUR">1785.00</cbc:PayableAmount>
+    </cac:LegalMonetaryTotal>
+
+    <cac:InvoiceLine>
+        <cbc:ID>1</cbc:ID>
+        <cbc:InvoicedQuantity unitCode="C62">10</cbc:InvoicedQuantity>
+        <cbc:LineExtensionAmount currencyCode="EUR">500.00</cbc:LineExtensionAmount>
+        <cac:Item>
+            <cbc:Description>Titanium Washer Type B</cbc:Description>
+            <cac:SellersItemIdentification>
+                <cbc:ID>MAR-24</cbc:ID>
+            </cac:SellersItemIdentification>
+        </cac:Item>
+        <cac:Price>
+            <cbc:PriceAmount currencyCode="EUR">50.00</cbc:PriceAmount>
+        </cac:Price>
+    </cac:InvoiceLine>
+
+    <cac:InvoiceLine>
+        <cbc:ID>2</cbc:ID>
+        <cbc:InvoicedQuantity unitCode="C62">20</cbc:InvoicedQuantity>
+        <cbc:LineExtensionAmount currencyCode="EUR">1000.00</cbc:LineExtensionAmount>
+        <cac:Item>
+            <cbc:Description>Industrial Logic Controller</cbc:Description>
+            <cac:SellersItemIdentification>
+                <cbc:ID>005E2</cbc:ID>
+            </cac:SellersItemIdentification>
+        </cac:Item>
+        <cac:Price>
+            <cbc:PriceAmount currencyCode="EUR">50.00</cbc:PriceAmount>
+        </cac:Price>
+    </cac:InvoiceLine>
+
+</Invoice>

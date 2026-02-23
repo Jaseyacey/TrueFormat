@@ -4,7 +4,7 @@ import math
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 
-from trueformat_backend.auth import get_current_user
+from trueformat_backend.auth import get_current_user, increment_doc_download_tracking
 from trueformat_backend.transformation import apply_transformation, suggest_mapping_for_upload
 
 router = APIRouter()
@@ -56,6 +56,11 @@ async def export_csv(
 
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False)
+        try:
+            increment_doc_download_tracking(current_user, amount=1)
+        except Exception:
+            # Tracking must not block CSV export.
+            pass
 
         return Response(
             content=csv_buffer.getvalue(),
@@ -64,3 +69,9 @@ async def export_csv(
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Export failed: {e}")
+
+
+@router.post("/track-download")
+async def track_download(current_user: str = Depends(get_current_user)):
+    count = increment_doc_download_tracking(current_user, amount=1)
+    return {"status": "success", "doc_download_tracking": count}
