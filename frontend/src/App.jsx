@@ -9,6 +9,7 @@ import AppWorkspace from './components/workspace/AppWorkspace.jsx';
 import SubscriptionPage from './components/billing/SubscriptionPage.jsx';
 import StaticPage from './components/common/StaticPage.jsx';
 import ContactPage from './components/common/ContactPage.jsx';
+import NotFoundPage from './components/common/NotFoundPage.jsx';
 import AahPharmaceuticalsXeroPage from './components/marketing/AahPharmaceuticalsXeroPage.jsx';
 import { navigate } from './utils/navigation.js';
 import { useAuth } from './hooks/useAuth.js';
@@ -295,7 +296,7 @@ export default function App() {
   } else if (path === '/aah-pharmaceuticals-xero-import') {
     content = <AahPharmaceuticalsXeroPage />;
   } else {
-    content = <MarketingHomePage onPrimaryCta={() => navigate('/signup')} />;
+    content = <NotFoundPage />;
   }
 
   return (
