@@ -293,6 +293,8 @@ export default function App() {
     content = <ContactPage />;
   } else if (path === '/blog') {
     content = <BlogMappingMess onCta={() => navigate('/signup')} />;
+  } else if (path === '/') {
+    content = <MarketingHomePage onPrimaryCta={() => navigate('/signup')} />;
   } else if (path === '/aah-pharmaceuticals-xero-import') {
     content = <AahPharmaceuticalsXeroPage />;
   } else {
