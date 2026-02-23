@@ -204,6 +204,16 @@ export default function MarketingHomePage({ onPrimaryCta }) {
               <br />
               Supplier Data Integrity.
             </h1>
+            <video
+              src="/videos/hero-demo.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="mt-6 w-full max-w-4xl rounded-xl border border-gray-200 shadow-2xl"
+            >
+              Your browser does not support the video tag.
+            </video>
             <p className="mt-5 max-w-2xl text-base leading-relaxed text-[#CBD5E1] sm:text-lg tf-hero-copy">
               Format hardening for CSV and PDF ingestion. TrueFormat eliminates rounding loss,
               date ambiguity, and leading-zero corruption before your ERP import.
