@@ -376,9 +376,6 @@ export default function MarketingHomePage({ onPrimaryCta }) {
         </section>
       </main>
 
-      <footer className="border-t border-white/10 bg-[#27272A]/55 px-6 py-6 text-center text-xs text-[#94A3B8] tf-home-footer">
-        Deterministic Data Pipeline • Optimized for Production Environments
-      </footer>
     </div>
   );
 }

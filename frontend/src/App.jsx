@@ -305,6 +305,10 @@ export default function App() {
     <div className="mx-auto w-[min(1180px,94vw)] py-6 tf-page">
       <TopNav authed={Boolean(auth.token)} onLogout={handleLogout} theme={theme} onToggleTheme={handleThemeToggle} />
       {content}
+      <footer className="mt-8 rounded-2xl border border-white/10 bg-[#27272A]/55 px-6 py-5 text-center text-xs text-[#94A3B8] tf-home-footer">
+        <p>TrueFormat is a trading name of Fixturefix. Registered in England &amp; Wales. Company No:15448622.</p>
+        <p className="mt-1">Registered office: 54 Wandsworth High Street, SW18 4RD.</p>
+      </footer>
     </div>
   );
 }

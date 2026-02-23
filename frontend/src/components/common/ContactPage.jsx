@@ -101,6 +101,11 @@ export default function ContactPage() {
       </form>
 
       {status && <p className="mt-3 text-sm font-medium text-[#94A3B8]">{status}</p>}
+
+      <div className="mt-6 rounded-lg border border-white/10 bg-white/[0.03] p-4 text-sm text-[#94A3B8]">
+        <p className="font-semibold text-[#CBD5E1]">Registered Office</p>
+        <p className="mt-1">54 Wandsworth High Street, SW18 4RD</p>
+      </div>
     </section>
   );
 }
