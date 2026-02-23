@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import FreeCsvHealthCheck from './components/marketing/FreeCsvHealthCheck.jsx';
 
 const beforeRows = [
   { sku: '4.56012E+12', invoice_date: '01/02/24', qty: '', amount: '1,2OO.50' },
@@ -252,6 +253,16 @@ export default function MarketingHomePage({ onPrimaryCta }) {
             columns={['transaction_id', 'date', 'quantity', 'amount']}
             variant="after"
           />
+        </section>
+
+        <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 backdrop-blur-md">
+          <h2 className="text-xl font-semibold text-[#F8FAFC]">Free CSV Health Check</h2>
+          <p className="mt-2 text-sm text-[#94A3B8]">
+            Drop in a supplier CSV and preview the exact formatting failures that block Xero and ERP imports.
+          </p>
+          <div className="mt-5">
+            <FreeCsvHealthCheck />
+          </div>
         </section>
 
         <FeatureComparisonTable />
