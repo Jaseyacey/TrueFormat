@@ -188,8 +188,8 @@ export default function MarketingHomePage({ onPrimaryCta }) {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_90%_8%,rgba(5,150,105,0.22),transparent_44%)]" />
 
       <main className="relative mx-auto max-w-6xl space-y-8 px-4 pb-12 pt-6 sm:px-6 lg:space-y-10 lg:px-10 lg:pt-10 tf-home-main">
-        <section className="grid gap-8 rounded-2xl border border-white/10 bg-[#059669]/10 p-5 sm:p-8 lg:grid-cols-12 lg:p-10 tf-hero">
-          <div className="lg:col-span-8 tf-hero-main">
+        <section className="grid gap-8 rounded-2xl border border-white/10 bg-[#059669]/10 p-5 sm:p-8 lg:p-10 tf-hero">
+          <div className="tf-hero-main">
             <div className="mb-6 flex flex-wrap items-center gap-4 tf-hero-kicker-row">
               <span className="inline-flex h-16 w-16 items-center justify-center rounded-full border border-[#38BDF8]/40 bg-[#1f2e4a] shadow-[0_0_28px_rgba(56,189,248,0.2)] tf-hero-logo-badge">
                 <img src="/trueformat-logo.svg" alt="TrueFormat logo" className="h-12 w-12 rounded-full tf-logo" />
@@ -200,23 +200,28 @@ export default function MarketingHomePage({ onPrimaryCta }) {
             </div>
 
             <h1 className="text-[2rem] font-black leading-tight tracking-tight text-[#F8FAFC] sm:text-5xl tf-hero-title">
-              Digital Locksmith For
+              Stop Manually Fixing
               <br />
-              Supplier Data Integrity.
+              Supplier Invoices.
             </h1>
-            <video
-              src="/videos/hero-demo.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="mt-6 w-full max-w-4xl rounded-xl border border-gray-200 shadow-2xl"
+            <div
+              className="mt-6 overflow-hidden rounded-xl border border-gray-800 bg-gray-900 shadow-2xl tf-hero-video"
+              style={{ width: '100%', height: '400px' }}
             >
-              Your browser does not support the video tag.
-            </video>
+              <video
+                src="/videos/hero-demo.mp4"
+                autoPlay
+                loop
+                muted
+                playsInline
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              >
+                Your browser does not support the video tag.
+              </video>
+            </div>
             <p className="mt-5 max-w-2xl text-base leading-relaxed text-[#CBD5E1] sm:text-lg tf-hero-copy">
-              Format hardening for CSV and PDF ingestion. TrueFormat eliminates rounding loss,
-              date ambiguity, and leading-zero corruption before your ERP import.
+              Stop manually fixing corrupted SKUs and broken CSVs. Mathematically audit every row before it hits your
+              ERP.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap tf-hero-actions">
@@ -236,18 +241,6 @@ export default function MarketingHomePage({ onPrimaryCta }) {
 
             <TrustGrid />
           </div>
-
-          <aside className="lg:col-span-4 tf-hero-side">
-            <div className="rounded-2xl border border-white/10 bg-[#27272A]/55 p-6 backdrop-blur-md tf-shame">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[#94A3B8]">Wall Of Shame</h2>
-              <div className="mt-4 space-y-3 text-sm text-[#CBD5E1] tf-shame-list">
-                <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 font-mono tf-shame-item">4.56E+12 → SKU corruption</div>
-                <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 font-mono tf-shame-item">01/02/24 ↔ 02/01/24 ambiguity</div>
-                <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 font-mono tf-shame-item">000123 → 123 leading zero loss</div>
-                <div className="rounded-lg border border-[#EF4444]/30 bg-[#EF4444]/10 px-3 py-2 font-mono text-[#EF4444] tf-shame-item tf-shame-danger">15-digit float rounding risk</div>
-              </div>
-            </div>
-          </aside>
         </section>
 
         <section className="grid gap-5 lg:grid-cols-2 tf-diff-grid">
