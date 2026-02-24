@@ -11,6 +11,8 @@ import StaticPage from './components/common/StaticPage.jsx';
 import ContactPage from './components/common/ContactPage.jsx';
 import NotFoundPage from './components/common/NotFoundPage.jsx';
 import AahPharmaceuticalsXeroPage from './components/marketing/AahPharmaceuticalsXeroPage.jsx';
+import RsComponentsNetSuitePage from './components/marketing/RsComponentsNetSuitePage.jsx';
+import FarnellOdooInvoiceImportPage from './components/marketing/FarnellOdooInvoiceImportPage.jsx';
 import { navigate } from './utils/navigation.js';
 import { useAuth } from './hooks/useAuth.js';
 import { clearIdentifiedUser, identifyUser, trackEvent, trackRouteChange } from './utils/analytics.js';
@@ -297,6 +299,10 @@ export default function App() {
     content = <MarketingHomePage onPrimaryCta={() => navigate('/signup')} />;
   } else if (path === '/aah-pharmaceuticals-xero-import') {
     content = <AahPharmaceuticalsXeroPage />;
+  } else if (path === '/rs-components-netsuite-csv-import') {
+    content = <RsComponentsNetSuitePage />;
+  } else if (path === '/farnell-odoo-invoice-import') {
+    content = <FarnellOdooInvoiceImportPage />;
   } else {
     content = <NotFoundPage />;
   }
