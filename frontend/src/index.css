@@ -373,6 +373,20 @@ body[data-theme='light'] {
   gap: 12px;
 }
 
+.tf-hero-video {
+  width: 100%;
+  min-height: 280px;
+  height: clamp(280px, 42vw, 420px);
+}
+
+.tf-hero-video-media {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center top;
+}
+
 .tf-shame {
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -424,13 +438,14 @@ body[data-theme='light'] {
 
 .tf-diff-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 16px;
 }
 
 .tf-diff-card {
   border-radius: 14px;
   padding: 14px;
+  min-width: 0;
 }
 
 .tf-diff-before {
@@ -445,6 +460,7 @@ body[data-theme='light'] {
 
 .tf-diff-table-wrap {
   overflow-x: auto;
+  max-width: 100%;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -479,6 +495,8 @@ body[data-theme='light'] {
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.03);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .tf-playground,
@@ -501,6 +519,8 @@ body[data-theme='light'] {
   border-radius: 12px;
   background: rgba(2, 6, 23, 0.28);
   padding: 16px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .tf-playground-input {
@@ -529,6 +549,7 @@ body[data-theme='light'] {
   padding: 12px;
   overflow: auto;
   margin-top: 12px;
+  max-width: 100%;
 }
 
 .tf-integrations-grid {
@@ -706,18 +727,49 @@ body[data-theme='light'] .text-light-emphasis {
     overflow-wrap: anywhere;
   }
 
+  .tf-hero-video {
+    min-height: 0;
+    height: auto;
+    aspect-ratio: 9 / 16;
+    max-height: 78vh;
+    background: #020617;
+  }
+
+  .tf-hero-video-media {
+    object-fit: contain;
+    object-position: center;
+    background: #020617;
+  }
+
   .tf-trust-grid,
-  .tf-diff-grid,
   .tf-how-grid,
   .tf-playground-grid,
   .tf-integrations-grid {
     grid-template-columns: 1fr;
   }
 
+  .tf-how-grid > *,
+  .tf-playground-grid > *,
+  .tf-integrations-grid > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .tf-docs-pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
   .tf-how,
   .tf-playground,
   .tf-integrations {
     padding: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .tf-diff-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

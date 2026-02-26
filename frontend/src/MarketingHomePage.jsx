@@ -206,7 +206,6 @@ export default function MarketingHomePage({ onPrimaryCta }) {
             </h1>
             <div
               className="mt-6 overflow-hidden rounded-xl border border-gray-800 bg-gray-900 shadow-2xl tf-hero-video"
-              style={{ width: '100%', height: '400px' }}
             >
               <video
                 src="/videos/hero-demo.mp4"
@@ -214,7 +213,7 @@ export default function MarketingHomePage({ onPrimaryCta }) {
                 loop
                 muted
                 playsInline
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                className="tf-hero-video-media"
               >
                 Your browser does not support the video tag.
               </video>
