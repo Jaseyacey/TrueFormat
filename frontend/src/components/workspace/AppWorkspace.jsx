@@ -355,14 +355,18 @@ export default function AppWorkspace({ token, onUnauthorized }) {
                     {Object.keys(row).map((col) => {
                       const raw = row[col] === null ? '' : String(row[col]);
                       const txCell = col === 'transaction_id';
-                      const displayValue = txCell && /^="(.*)"$/.test(raw) ? raw.slice(2, -1) : raw;
+                      const isLockedString = raw.startsWith('="') && raw.endsWith('"');
+                      const displayValue = isLockedString ? raw.slice(2, -1) : raw;
                       return (
                         <td key={col} className="tf-table-cell">
                           {isEditing ? (
                             <input
                               className="w-full rounded border border-white/10 bg-[#0B1220] px-2 py-1 text-xs text-[#F8FAFC] outline-none focus:border-[#38BDF8]"
-                              value={raw}
-                              onChange={(e) => handleCellChange(idx, col, e.target.value)}
+                              value={displayValue}
+                              onChange={(e) => {
+                                const newVal = isLockedString ? `="${e.target.value}"` : e.target.value;
+                                handleCellChange(idx, col, newVal);
+                              }}
                             />
                           ) : txCell ? (
                             <span className="tf-tx-chip">{displayValue}</span>

@@ -429,10 +429,12 @@ def apply_transformation(file: UploadFile, mapping: dict) -> pd.DataFrame:
         mask = final_df["amount"].isna() & final_df["line_total"].notna()
         final_df.loc[mask, "amount"] = final_df.loc[mask, "line_total"]
 
-    # Deterministic Math Audit: override line_total where OCR values are inconsistent
+    # Deterministic Math Audit: enforce strict rounding and override inconsistent OCR totals
     if {"quantity", "amount", "line_total"}.issubset(final_df.columns):
+        final_df["amount"] = final_df["amount"].round(2)
+        final_df["line_total"] = final_df["line_total"].round(2)
         calculated_total = (final_df["quantity"] * final_df["amount"]).round(2)
-        actual_total = final_df["line_total"].round(2)
+        actual_total = final_df["line_total"]
         mismatch_mask = (
             final_df["quantity"].notna()
             & final_df["amount"].notna()
