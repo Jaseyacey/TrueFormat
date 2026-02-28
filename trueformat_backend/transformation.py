@@ -395,7 +395,7 @@ def apply_transformation(file: UploadFile, mapping: dict) -> pd.DataFrame:
 
     if {"quantity", "amount", "line_total"}.issubset(final_df.columns):
         mask = final_df["line_total"].isna() & final_df["quantity"].notna() & final_df["amount"].notna()
-        final_df.loc[mask, "line_total"] = final_df.loc[mask, "quantity"] * final_df.loc[mask, "amount"]
+        final_df.loc[mask, "line_total"] = (final_df.loc[mask, "quantity"] * final_df.loc[mask, "amount"]).round(2)
 
     if {"quantity", "amount", "line_total"}.issubset(final_df.columns):
         mask = (
@@ -404,7 +404,7 @@ def apply_transformation(file: UploadFile, mapping: dict) -> pd.DataFrame:
             & final_df["line_total"].notna()
             & (final_df["quantity"] != 0)
         )
-        final_df.loc[mask, "amount"] = final_df.loc[mask, "line_total"] / final_df.loc[mask, "quantity"]
+        final_df.loc[mask, "amount"] = (final_df.loc[mask, "line_total"] / final_df.loc[mask, "quantity"]).round(4)
 
     if {"quantity", "amount", "line_total"}.issubset(final_df.columns):
         mask = (
@@ -413,8 +413,7 @@ def apply_transformation(file: UploadFile, mapping: dict) -> pd.DataFrame:
             & final_df["amount"].notna()
             & (final_df["amount"] != 0)
         )
-        final_df.loc[mask, "quantity"] = final_df.loc[mask, "line_total"] / final_df.loc[mask, "amount"]
-        final_df["quantity"] = final_df["quantity"].round(6)
+        final_df.loc[mask, "quantity"] = (final_df.loc[mask, "line_total"] / final_df.loc[mask, "amount"]).round(4)
 
     if {"quantity", "amount", "line_total"}.issubset(final_df.columns):
         mask = (
@@ -424,12 +423,29 @@ def apply_transformation(file: UploadFile, mapping: dict) -> pd.DataFrame:
             & final_df["amount"].notna()
             & (final_df["amount"] != 0)
         )
-        final_df.loc[mask, "quantity"] = final_df.loc[mask, "line_total"] / final_df.loc[mask, "amount"]
-        final_df["quantity"] = final_df["quantity"].round(6)
+        final_df.loc[mask, "quantity"] = (final_df.loc[mask, "line_total"] / final_df.loc[mask, "amount"]).round(4)
 
     if "amount" in final_df.columns and "line_total" in final_df.columns:
         mask = final_df["amount"].isna() & final_df["line_total"].notna()
         final_df.loc[mask, "amount"] = final_df.loc[mask, "line_total"]
+
+    # Deterministic Math Audit: override line_total where OCR values are inconsistent
+    if {"quantity", "amount", "line_total"}.issubset(final_df.columns):
+        calculated_total = (final_df["quantity"] * final_df["amount"]).round(2)
+        actual_total = final_df["line_total"].round(2)
+        mismatch_mask = (
+            final_df["quantity"].notna()
+            & final_df["amount"].notna()
+            & final_df["line_total"].notna()
+            & ((calculated_total - actual_total).abs() > 0.02)
+        )
+        final_df.loc[mismatch_mask, "line_total"] = calculated_total[mismatch_mask]
+
+    # String Locking: wrap transaction_id in Excel formula to prevent leading-zero corruption
+    if "transaction_id" in final_df.columns:
+        final_df["transaction_id"] = final_df["transaction_id"].apply(
+            lambda x: f'="{str(x).strip()}"' if pd.notna(x) and str(x).strip() else x
+        )
 
     if "date" in final_df.columns:
         raw_date = final_df["date"].astype(str).str.strip()

@@ -355,6 +355,7 @@ export default function AppWorkspace({ token, onUnauthorized }) {
                     {Object.keys(row).map((col) => {
                       const raw = row[col] === null ? '' : String(row[col]);
                       const txCell = col === 'transaction_id';
+                      const displayValue = txCell && /^="(.*)"$/.test(raw) ? raw.slice(2, -1) : raw;
                       return (
                         <td key={col} className="tf-table-cell">
                           {isEditing ? (
@@ -364,9 +365,9 @@ export default function AppWorkspace({ token, onUnauthorized }) {
                               onChange={(e) => handleCellChange(idx, col, e.target.value)}
                             />
                           ) : txCell ? (
-                            <span className="tf-tx-chip">{raw}</span>
+                            <span className="tf-tx-chip">{displayValue}</span>
                           ) : (
-                            raw
+                            displayValue
                           )}
                         </td>
                       );
